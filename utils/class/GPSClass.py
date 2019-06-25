@@ -15,7 +15,7 @@ class GPSClass:
       R_NE = None
       IS_GPS_AVAILABLE = None 
 
-      def __init__(self,timestatic,params):
+      def __init__(self,timeStatic,params):
 
           self.IS_GPS_AVAILABLE = 0
           if(params.SWITCH_SIM == 1):
@@ -41,10 +41,11 @@ class GPSClass:
           sigVelZ=  data[:][15]
         
           # Save the initial time as reference for other sensors
-          self.timeInit= self.time(1)
+          self.timeInit= self.time[1]
             
           # Make time start at zero
-          self.time= self.time - self.time(1)
+          print(self.time)
+          self.time= self.time - self.time[1]
             
           # create variables
           self.msmt= np.transpose(np.array([posX, posY, posZ, velX, velY, velZ]))
