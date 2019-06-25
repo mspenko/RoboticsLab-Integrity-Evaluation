@@ -13,7 +13,7 @@ class DataClass:
     
       # ----------------------------------------------
       # ----------------------------------------------
-      def __init__(imu_num_readings, lidar_num_readings, params):
+      def __init__(self,imu_num_readings, lidar_num_readings, params):
           self.pred= PredictionClass.PredictionDataClass(imu_num_readings, params)
           self.update= UpdateDataClass.UpdateDataClass(imu_num_readings, params)
           self.im= IntegrityDataClass.IntegrityDataClass(lidar_num_readings)

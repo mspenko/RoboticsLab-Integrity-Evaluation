@@ -1,10 +1,11 @@
+import numpy as np
 class PredictionDataClass:
       properties = None
       XX = None
       time = None
     
 
-      def __init__(num_readings, params):
+      def __init__(self,num_readings, params):
            # allocate memory
            self.XX= np.zeros((params.m, num_readings));
            self.time= np.zeros((num_readings, 1));
