@@ -33,8 +33,8 @@ class ParametersClass:
       SWITCH_OFFLINE= 0
 
       path_test= '../../data/cart/20180725/'
-      path_test= '../../data/vehicle/20190110/'    #注意这个地方，去掉1个'../'
-      path_sim_kf= '../../data/simulation/straight/'
+      path_test= '../data/vehicle/20190110/'    #注意这个地方，去掉1个'../'
+      path_sim_kf= '../data/simulation/straight/'
       path_sim= '../../data/simulation/square/'
       path_sim_fg= '../../data/simulation/factor_graph/'
       path_exp_fg= '../../data/vehicle/20190110/'
