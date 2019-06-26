@@ -185,19 +185,18 @@ class EstimatorClassSlam:
       # ----------------------------------------------
       def yawUpdate(self,w,R,r_IMU2rearAxis):
 
-          global XX,PX
-
           n_L= (XX.shape[0] - 15) / 2
           H= np.zeros((1, 15 + 2*n_L))
           H[8]= 1
 
+          R= params.R_yaw_fn( np.norm(self.XX[3:5]));
           z= yawMeasurement(w,r_IMU2rearAxis)
           L= PX*np.transpose(H) / (H*PX*np.transpose(H) + R)
           innov= z - H*XX
           innov= pi_to_pi.pi_to_pi(innov)
-          XX[8]= pi_to_pi.pi_to_pi(XX[8])
-          XX= XX + L*innov
-          PX= PX - L*H*PX
+          self.XX[8]= pi_to_pi.pi_to_pi(XX[8])
+          self.XX= XX + L*innov
+          self.PX= PX - L*H*PX
       # ----------------------------------------------
       # ----------------------------------------------
       def yawMeasurement(self, w, params):
@@ -259,70 +258,94 @@ class EstimatorClassSlam:
           self.PX= self.PX - L*H*self.PX
       # ----------------------------------------------
       # ----------------------------------------------
-      def lidarUpdate(self,z,association,appearances,R,SWITCH_CALIBRATION):
+      def lidarUpdate(self,z,association,params):
 
-          global XX,PX
-          XX[8]= pi_to_pi.pi_to_pi(XX[8])
+          
+          R= params.R_lidar;
+          self.XX(8)= pi_to_pi.pi_to_pi( self.XX(8) );
+
           if all(association == -1):
-             return
+             return 0
+
           # Eliminate the non-associated features
+          ind_to_eliminate= association == -1 or association == 0;
+          z= np.delete(z,(ind_to_eliminate,:))
+          association = np.delete(association,(ind_to_eliminate))
+
+          # Eliminate features associated to landmarks that has appeared less than X times
           acc = 0
-          for i in association:
-              if(i == -1 or i ==0):
-                 np.delete(z,acc,1)
+          ind_to_eliminate = []
+          for i in association:  #ind_to_eliminate= self.appearances[association] <= params.min_appearances;
+              if (self.appearances[i] <= params.min_appearances):
+                 ind_to_eliminate.append(1)
+              else:
+                 ind_to_eliminate.append(0)
               acc = acc+1
 
-          acc = 0
-          for i in association:
-              if(i == -1 or i ==0):
-                 np.delete(association,acc)
+          acc=0
+          for i in ind_to_eliminate:    #z(ind_to_eliminate,:)= [];
+              if z[acc] == 1:
+                 a = np.delete(a,(acc,:))
               acc = acc+1
+          
+          acc = 0
+          for i in ind_to_eliminate:    #association(ind_to_eliminate)= [];
+              if i == 1:
+                 association= np.delete(association,acc)
+              acc = acc+1
+          
 
-          lenz= association.shape[0]
-          lenx= XX.shape[0]
+          # if no measurent can be associated --> return
+          if isempty(z):
+              return 0
 
-          R= np.kron((R,eye(lenz)))
-          H= np.zeros((2*lenz,lenx))
+          lenz= association.shape[0];
+          lenx= self.XX.shape[0];
+
+          R= np.kron( R,np.eye(lenz) );
+          H= np.zeros((2*lenz,lenx));
 
           #Build Jacobian H
-          spsi= math.sin(XX[8])
-          cpsi= math.cos(XX[8])
-          zHat= np.zeros((2*lenz,1))
+          spsi= sin(self.XX(9));
+          cpsi= cos(self.XX(9));
+          zHat= zeros(2*lenz,1);
           for i in range(association.shape[0]):
-              # Indexes 
-              indz= 2*i + np.array([-1,0])
-              indx= 15 + 2*association[i]+ np.array([-1,0])
-
-              dx= XX[indx[0]] - XX[0]
-              dy= XX[indx[1]] - XX[1]
-
+              # Indexes
+              indz= 2*i + [-1,0];
+              indx= 15 + 2*association[i] + [-1,0];
+    
+              dx= self.XX[indx[0]] - self.XX[0];
+              dy= self.XX[indx[1]] - self.XX[1];
+    
               # Predicted measurement
-              zHat[indz]= np.array([[dx*cpsi + dy*spsi],[-dx*spsi + dy*cpsi]])
-
+              zHat[indz]= np.array([dx*cpsi + dy*spsi;
+                  -dx*spsi + dy*cpsi]);
+    
               # Jacobian -- H
-              H[indz,0]= np.array([[-cpsi], [spsi]])
+              H[indz,0]= np.array([[-cpsi],[ spsi]])
               H[indz,1]= np.array([[-spsi],[-cpsi]])
-              H[indz,9]= np.array([[-dx * spsi + dy * cpsi],[-dx * cpsi - dy * spsi]])
-              H[indz,indx]= np.array([[cpsi, spsi],[-spsi, cpsi]])
+              H[indz,8]= np.array([[-dx * spsi + dy * cpsi],[-dx * cpsi - dy * spsi]]);
+              H[indz,indx]= np.array([[cpsi, spsi],[-spsi, cpsi]]);
+    
 
           # Update
-          Y= H*PX*np.transpose(H) + R
-          L= PX * np.transpose(H) / Y
-          zVector= np.transpose(z)
-          zVector= zVector[:]
-          innov= zVector - zHat
+          Y= H*self.PX*np.transpose(H) + R;
+          L= self.PX * np.transpose(H) / Y;
+          zVector= np.transpose(z) 
+          zVector= zVector[:];
+          innov= zVector - zHat;
 
           # If it is calibrating, update only landmarks
-          if (SWITCH_CALIBRATION == 1):
-             XX0= XX[0:14]
-             PX0= PX[0:14,0:14]
-             XX= XX + L*innov
-             PX= PX - L*H*PX
-             XX[0:14]= XX0
-             PX[0:14,0:14]= PX0
-          else: 
-             XX= XX + L*innov
-             PX= PX - L*H*PX
+          if (params.SWITCH_CALIBRATION ==1):
+              XX0= self.XX[0:14];
+              PX0= self.PX[0:14,0:14];
+              self.XX= self.XX + L*innov;
+              self.PX= self.PX - L*H*self.PX;
+              self.XX[0:14]= XX0;
+              self.PX[0:14,0:14]= PX0;
+          else
+              self.XX= self.XX + L*innov;
+              self.PX= self.PX - L*H*self.PX;
       # ----------------------------------------------
       # ----------------------------------------------    
       def addNewLM(self, z, R):
