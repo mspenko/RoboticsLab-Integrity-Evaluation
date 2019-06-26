@@ -78,13 +78,11 @@ class EstimatorClassSlam:
           self.XX[params.ind_yaw]= np.deg2rad(params.initial_yaw_angle)
 
           # save initial attitude for calibration
-          self.initial_attitude= self.XX[7:9]
+          self.initial_attitude= self.XX[6:8]
 
           # initialize covariance
           self.PX[9:11, 9:11]= np.diag( np.array([params.sig_ba,params.sig_ba,params.sig_ba]) )**2
           self.PX[12:14, 12:14]= np.diag( np.array([params.sig_bw,params.sig_bw,params.sig_bw]) )**2
-
-          association= nearest_neighbor.nearest_neighbor(self, z, params)
       # ----------------------------------------------
       # ----------------------------------------------                    
       def compute_alpha(self,params):
@@ -103,7 +101,6 @@ class EstimatorClassSlam:
           
           self.XX[6]= math.atan2( g_bar[1],g_bar[2] )
           self.XX[7]= math.atan2( -g_bar[0], np.sqrt( g_bar[1]**2 + g_bar[2]**2 ) )
-          print(self.XX[6],self.XX[7])
           # My method -- works for z-axis pointing down (accz < 0)
           # theta=  atan2( g_bar(1) , abs(g_bar(3)) )
           # phi=   -atan2( g_bar(2) , abs(g_bar(3)) )
@@ -118,10 +115,10 @@ class EstimatorClassSlam:
           G = tmp[1]
           # Discretize system for IMU time (only for variance calculations)
           tmp =discretize(F, G, S, dT)
-          Phi = tmp[0]
-          D_bar = tmp[1]
+          self.Phi = tmp[0]
+          self.D_bar = tmp[1]
 
-          return [Phi,D_bar]
+          
       # ----------------------------------------------
 
       def calibration(self, imu_msmt, params):
@@ -240,23 +237,6 @@ class EstimatorClassSlam:
           '''       
       # ----------------------------------------------
       # ----------------------------------------------
-      def vel_update_z(self, R):
-
-          # Normalize yaw
-          self.XX[8]= pi_to_pi.pi_to_pi( self.XX[8] )
-
-          # Update
-          R_BN= np.transpose(R_NB_rot.R_NB_rot( self.XX[6], self.XX[7], self.XX[8] ))
-          H= np.array([0,0,1]) * R_BN * np.array([np.zeros(2),np.eye(2),np.zeros((2,8))])
-          L= self.PX*np.transpose(H) / (H*self.PX*np.transpose(H) + R)
-          z_hat= H * self.XX
-          innov= 0 - z_hat
-
-          self.XX= self.XX + L*innov
-          self.PX= self.PX - L*H*self.PX
-      # ----------------------------------------------
-      # ----------------------------------------------
-
       def gps_update(self, z, R, params):
           n_L= ((self.XX).shape[0] - 15) / 2
           # if we are fast enough --> use GPS velocity msmt
@@ -390,38 +370,37 @@ class EstimatorClassSlam:
           self.PX[15:,15:]= self.PX[15:end,15:end] - np.diag( diffDiagLM )
 
 # =====================================================================================  
-def discretize(F, G, S, dT):
-    #MATRICES2DISCRETE This def discretize the continuous time model. It
-    #works for either the GPS or IMU discretization times.
-    # sysc= ss(F, zeros(15,1), zeros(1,15), 0)
-    # sysd= c2d(sysc, dT)
-    # Phi= sysd.A
+      def discretize(self,F, G, S, dT):
+          #MATRICES2DISCRETE This def discretize the continuous time model. It
+          #works for either the GPS or IMU discretization times.
+          # sysc= ss(F, zeros(15,1), zeros(1,15), 0)
+          # sysd= c2d(sysc, dT)
+          # Phi= sysd.A
 
-    # Methdo to obtain covariance matrix for dicrete system
-    C= np.transpose([[-F, G*S*np.transpose(G)],[zeros(15), np.transpose(F)]])
+          # Methdo to obtain covariance matrix for dicrete system
+          C= np.transpose([[-F, G*S*np.transpose(G)],[zeros(15), np.transpose(F)]])
 
-    # Proper method
-    EXP= expm[C*dT]
-    Phi= np.transpose(EXP[15:,15:])
-    D_bar= Phi * EXP[1:14,15:]
+          # Proper method
+          EXP= expm[C*dT]
+          self.Phi= np.transpose(EXP[15:,15:])
+          self.D_bar= Phi * EXP[1:14,15:]
 
-    # Simplified method
-    D_bar= (G*dT) * (S/dT) * np.transpose((G*dT)) # simplified version
+          # Simplified method
+         self.D_bar= (G*dT) * (S/dT) * np.transpose((G*dT)) # simplified version
 
-    return [Phi, D_bar]
-
+ 
  # ----------------------------------------------
  # ----------------------------------------------  
-def yawMeasurement(w,r_IMU2rearAxis):
-    global XX
+      def yawMeasurement(self,w,r_IMU2rearAxis):
+          global XX
 
-    r= np.array([[-r_IMU2rearAxis],[0],[0]])
-    v_o= XX[3:5]
-    R_NB= R_NB_rot.R_NB_rot(XX[6],XX[7],XX[8])
-    v_a= v_o + R_NB * np.cross(w,r)
-    v_a= v_a / np.norm(v_a)
-    yaw= math.atan2(v_a[1],v_a[0]) 
-    return yaw
+          r= np.array([[-r_IMU2rearAxis],[0],[0]])
+          v_o= XX[3:5]
+          R_NB= R_NB_rot.R_NB_rot(XX[6],XX[7],XX[8])
+          v_a= v_o + R_NB * np.cross(w,r)
+          v_a= v_a / np.norm(v_a)
+          self.yaw= math.atan2(v_a[1],v_a[0]) 
+    
  # ----------------------------------------------
  # ----------------------------------------------       
 
