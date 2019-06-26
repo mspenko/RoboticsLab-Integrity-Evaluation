@@ -8,13 +8,13 @@ def ecef2lla(x,y,z):
     e = 8.1819190842622e-2
 
     # calculations:
-    b   = sqrt(a**2*(1-e**2))
-    ep  = sqrt((a**2-b**2)/b**2)
-    p   = sqrt(x**2+y**2)
+    b   = math.sqrt(a**2*(1-e**2))
+    ep  = math.sqrt((a**2-b**2)/b**2)
+    p   = math.sqrt(x**2+y**2)
     th  = math.atan2(a*z,b*p)
     lon = math.atan2(y,x)
     lat = math.atan2((z+ep**2*b*math.sin(th)**3),(p-e**2*a*math.cos(th)**3))
-    N   = a/sqrt(1-e**2*math.sin(lat)**2)
+    N   = a/math.sqrt(1-e**2*math.sin(lat)**2)
     alt = p/math.cos(lat)-N
 
     # return lon in range [0,2*pi)
@@ -24,7 +24,7 @@ def ecef2lla(x,y,z):
     # (after this correction, error is about 2 millimeters, which is about
     # the same as the numerical precision of the overall function)
  
-    k= abs(x)<1 & abs(y)<1
-    alt[k] = abs(z[k])-b
+    k= int(abs(x)<1 and abs(y)<1)
+    alt = abs(z)-b
 
     return [lat,lon,alt]

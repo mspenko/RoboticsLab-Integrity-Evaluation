@@ -5,7 +5,8 @@ sys.path.insert(0,'../utils/functions/')
 sys.path.insert(0,'../utils/class/')
 import ParametersClass
 import CountersClass
-import DataClass
+import LidarClass
+#import DataClass
 import GPSClass
 
 
