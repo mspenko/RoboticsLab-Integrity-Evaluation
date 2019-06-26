@@ -8,12 +8,11 @@ class IMUClass:
       inc_msmt     = None
       msmt         = None
 
-      def __init__(self,params,init_time):
+      def __init__(self,params,initial_time):
          # DATAREAD Reads a datafile and outputs a series of vectors of the data
          # Data id in columns
  
          # load "data" for the IMU
-         dtype1 = np.dtype([('0','f8'),('1','f8'),('2','f8'),('3','f8'),('4','f8'),('5','f8'),('6','f8'),('7','f8'),('8','f8'),('9','f8'),('10','f8'),('0','f8'),('1','f8'),('2','f8'),('3','f8'),('4','f8'),('5','f8'),('6','f8')])
          data = np.loadtxt(params.file_name_imu)
 
          g0= 9.80665 # m/s^2 -- by manufacturerw -- TODO: include in parameters
@@ -44,8 +43,7 @@ class IMUClass:
 
 
          # ------------ Initial calibration ---------
-         dtype2 = np.dtype([('iinvC','f8'),('invC','f8'),('ib_0','f8'),('b_0','f8')])
-         load(params.file_name_calibration) # loads iinvC, invC, ib_0, b_0; [YH] The format I difined here is different from the original
+         data = np.loadtxt(params.file_name_calibration) # loads iinvC, invC, ib_0, b_0; [YH] The format I difined here is different from the original
          invC= np.array([invC, np.zeros(3),np.zeros(3), np.eye(3)])
            
          self.inc_msmt= (iinvC * self.inc_msmt) - ib_0
