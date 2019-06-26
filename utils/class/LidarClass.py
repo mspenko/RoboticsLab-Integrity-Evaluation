@@ -31,31 +31,31 @@ class LidarClass():
 
           # substracts the GPS start time which is used as reference    
           # load the variable "T_LIDAR"
-          dtype1 = np.dtype([('epoch','f8'),('time','f8')])
-          self.time = np.loadtxt(params.file_name_lidar_path+'T_LIDAR.txt',dtype = dtype1)
+          self.time = np.loadtxt(params.file_name_lidar_path+'T_LIDAR.txt')
           try:
-            dtype2 = np.dtype([('xmin','I8'),('xmax','I8'),('ymin','I8'),('ymax','I8')])
-            self.areas_to_remove = np.loadtxt(params.file_name_lidar_path+'T_LIDAR.txt',dtype = dtype2)
+            self.areas_to_remove = np.loadtxt(params.file_name_lidar_path+'areas_to_remove.txt')
           except:
              print("[MSG] no area to remove")
-
           #Use the GPS first reading time as reference
-          self.time[:][1]= self.time[:][1] - init_time
-            
+          self.time[:,1]= self.time[:,1] - np.ones(self.time.shape[0])*init_time
+          
           #If some of the initial times are negative (prior to first GPS reading) --> eliminate them
-          self.time[self.time[:,1]<0] [ :]= [] 
+          acc = 0
+          for i in self.time[:,1]:
+              if(i<0):
+                 np.delete(self.time,acc,axis = 0)
+              acc = acc+1
           #number of lidar scans
-          self.num_readings= length(self.time)
+          self.num_readings= self.time.shape[0]
 
 
       # ----------------------------------------------
       # ----------------------------------------------
       def get_msmt(self,epoch,params):
             # load the mat file with the extrated features at the lidar epoch specified
-            dtype2 = np.dtype([('x','f8'),('y','f8')])
             fileName = params.file_name_lidar_path+'matFiles/Epoch'+str(epoch)+'.txt'
             # loads the z variable with range and bearing
-            self.msmt= np.loadtxt(fileName,dtype3) 
+            self.msmt= np.loadtxt(fileName) 
             # if there are features --> prepare the measurement
             if (self.msmt != None):
                 if (params.SWITCH_REMOVE_FAR_FEATURES==1):
