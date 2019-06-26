@@ -18,7 +18,7 @@ class CountersClass:
           # if it's a simulation --> time is not read from files
           if (params.SWITCH_SIM == 0 & params.SWITCH_FACTOR_GRAPHS == 0):
               self.time_gps= gps.time[0] # this is zero, as the GPS time is the reference
-              self.time_lidar= lidar.time[1,2]
+              self.time_lidar= lidar.time[2,1]
             
         
         
