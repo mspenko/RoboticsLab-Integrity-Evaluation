@@ -7,6 +7,7 @@ import R_NB_rot
 import Q_BE_fn
 import nearestNeighbor
 import body2nav_3D
+import math
 
 
 class EstimatorClassSlam:
@@ -80,7 +81,7 @@ class EstimatorClassSlam:
           self.initial_attitude= self.XX[7:9]
 
           # initialize covariance
-          self.PX[9:1, 9:11]= np.diag( np.array([params.sig_ba,params.sig_ba,params.sig_ba]) )**2
+          self.PX[9:11, 9:11]= np.diag( np.array([params.sig_ba,params.sig_ba,params.sig_ba]) )**2
           self.PX[12:14, 12:14]= np.diag( np.array([params.sig_bw,params.sig_bw,params.sig_bw]) )**2
 
           association= nearest_neighbor.nearest_neighbor(self, z, params)
@@ -95,13 +96,14 @@ class EstimatorClassSlam:
       def initialize_pitch_and_roll(self, imu_calibration_msmts):
           # calculates the initial pitch and roll
           # compute gravity from static IMU measurements
-          g_bar= np.mean( imu_calibration_msmts,1 )
-
+          #g_bar= np.mean( imu_calibration_msmts,1 )
+          g_bar= imu_calibration_msmts
           # Books method
           g_bar= -g_bar
-          self.XX[6]= np.atan2( g_bar[1],g_bar[2] )
-          self.XX[7]= np.atan2( -g_bar[0], np.sqrt( g_bar[1]**2 + g_bar[2]**2 ) )
-
+          
+          self.XX[6]= math.atan2( g_bar[1],g_bar[2] )
+          self.XX[7]= math.atan2( -g_bar[0], np.sqrt( g_bar[1]**2 + g_bar[2]**2 ) )
+          print(self.XX[6],self.XX[7])
           # My method -- works for z-axis pointing down (accz < 0)
           # theta=  atan2( g_bar(1) , abs(g_bar(3)) )
           # phi=   -atan2( g_bar(2) , abs(g_bar(3)) )
