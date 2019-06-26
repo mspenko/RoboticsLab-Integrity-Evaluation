@@ -70,7 +70,7 @@ for epoch in range(imu.num_readings-1):
     if( counters.time_sum_virt_y >= params.dt_virt_y and params.SWITCH_VIRT_UPDATE_Y and ~params.SWITCH_CALIBRATION):
          
         # Yaw update
-        if (params.SWITCH_YAW_UPDATE==1 and np.norm(estimator.XX[4:6]) > params.min_vel_yaw):
+        if (params.SWITCH_YAW_UPDATE==1 and np.norm(estimator.XX[3:5]) > params.min_vel_yaw):
             print('yaw udpate');
             estimator.yaw_update( imu.msmt[3:5,epoch], params);
         counters.reset_time_sum_virt_y();
@@ -114,10 +114,10 @@ for epoch in range(imu.num_readings-1):
             lidar.remove_features_in_areas(estimator.XX[0:8]);
             
             # NN data association
-            association= estimator.nearest_neighbor(lidar.msmt[:,1:2], params);
+            association= estimator.nearest_neighbor(lidar.msmt[:,0:1], params);
             
             # Lidar update
-            estimator.lidar_update(lidar.msmt[:,1:2], association, params);
+            estimator.lidar_update(lidar.msmt[:,0:1], association, params);
 
             # Increase landmark covariance to the minimum
             estimator.increase_landmarks_cov(params.R_minLM);
@@ -129,7 +129,7 @@ for epoch in range(imu.num_readings-1):
             estimator.linearize_discretize( imu.msmt[:,epoch], params.dt_imu, params);
             
             # Store data
-            data_obj.store_msmts( body2nav_3D(lidar.msmt, estimator.XX[1:9]) );# Add current msmts in Nav-frame
+            data_obj.store_msmts( body2nav_3D(lidar.msmt, estimator.XX[0:8]) );# Add current msmts in Nav-frame
             counters.k_update= data_obj.store_update(counters.k_update, estimator, counters.time_sim);
         end
         
