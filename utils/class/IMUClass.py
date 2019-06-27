@@ -38,7 +38,7 @@ class IMUClass:
          self.msmt= np.transpose(np.array([accX, accY, accZ, gyroX, gyroY, gyroZ]))
             
          # num of readings
-         self.num_readings= self.msmt.shape[1];
+         self.num_readings= self.msmt.shape[0];
          
          invC  = np.array([[1.0010,0,0],[0,1.0066,0],[0,0,0.9958]])
          iinvC = np.array([[0.9993,0,0],[0,1.0045,0],[0,0,0.9949]])

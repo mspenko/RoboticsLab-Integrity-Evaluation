@@ -13,7 +13,7 @@ class PredictionDataClass:
        # ----------------------------------------------
        # ----------------------------------------------
       def store(self, epoch, estimator, time):
-          self.XX[:,epoch]= estimator.XX[1:15];
+          self.XX[:,epoch]= (estimator.XX[0:15]).transpose();
           self.time[epoch]= time;
         
        # ----------------------------------------------

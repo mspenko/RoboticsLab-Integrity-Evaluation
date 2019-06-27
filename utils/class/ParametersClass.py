@@ -272,6 +272,7 @@ class ParametersClass:
            self.min_vel_gps = eval(para['min_vel_gps'])
            self.min_vel_yaw = eval(para['min_vel_yaw'])
            self.taua_normal_operation = para['taua_normal_operation']
+           self.tauw_normal_operation = para['tauw_normal_operation']
            self.taua_calibration = para['taua_calibration']
            self.tauw_calibration = para['tauw_calibration']
            self.g_val = para['g_val']

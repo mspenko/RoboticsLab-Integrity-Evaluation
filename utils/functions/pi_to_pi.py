@@ -7,11 +7,11 @@ def  pi_to_pi(angle):
      if angle.shape[0] == 1:
         if (angle < -2*math.pi or angle > 2*math.pi):
            #warning('pi_to_pi() error: angle outside 2-PI bounds.')
-           angle= np.mod(angle, 2*pi)
+           angle= np.mod(angle, 2*math.pi)
 
-        if angle > pi:
+        if angle > math.pi:
           angle= angle - 2*math.pi
-        elif angle < -pi:
+        elif angle < -math.pi:
              angle= angle + 2*math.pi
 
 

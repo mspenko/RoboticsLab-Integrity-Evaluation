@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.linalg import expm
 import sys
 sys.path.insert(0,'../functions/')
 import pi_to_pi
@@ -119,10 +120,10 @@ class EstimatorClassSlam:
              S= params.S;
 
           # Compute the F and G matrices (linear continuous time)
-          np.array([F,G])=FG_fn(u[0],u[1],u[2],u[4],u[5],self.XX[6],self.XX[7],self.XX[8],self.XX[9],self.XX[10],self.XX[11],self.XX[13],self.XX[14],taua,tauw);
+          [F,G]=FG_fn.FG_fn(u[0],u[1],u[2],u[4],u[5],self.XX[6],self.XX[7],self.XX[8],self.XX[9],self.XX[10],self.XX[11],self.XX[13],self.XX[14],taua,tauw)
 
           # Discretize system for IMU time (only for variance calculations)
-         self.discretize(F, G, S, dT);
+          self.discretize(F, G, S, dT);
 
           
       # ----------------------------------------------
@@ -145,7 +146,7 @@ class EstimatorClassSlam:
 
           # linearize and discretize after every non-IMU update
           tmp = self.linearize_discretize( imu_msmt, params.dt_imu, params)
-          self.Phi = tmp[0]
+          self.Phi_k = tmp[0]
           self.D_bar = tmp[1]
           # If GPS is calibrating initial biases, increse bias variance
           self.D_bar[9:12,9:12]= self.D_bar[9:12,9:12] + np.diag( [params.sig_ba,params.sig_ba,params.sig_ba] )**2
@@ -161,8 +162,8 @@ class EstimatorClassSlam:
           phi= self.XX[6]
           theta= self.XX[7] 
           psi= self.XX[8]
-          b_f= self.XX[9:12]
-          b_w= self.XX[12:15]
+          b_f= self.XX[9:12].transpose()
+          b_w= self.XX[12:15].transpose()
           f= imu_msmt[0:3]
           w= imu_msmt[3:6]
 
@@ -176,20 +177,18 @@ class EstimatorClassSlam:
           # Calculate parameters
           R_NB= R_NB_rot.R_NB_rot(phi,theta,psi) #<============
           Q_BE= Q_BE_fn.Q_BE_fn(phi,theta)
-
           r_dot= v
-          v_dot= R_NB * ( f - b_f ) + params.g_N
-          E_dot= Q_BE * ( w - b_w )
-          b_f_dot= -np.eye(3) / taua * b_f
-          b_w_dot= -np.eye(3) / tauw * b_w
-          x_dot= np.array([r_dot,v_dot,E_dot,b_f_dot,b_w_dot])
-
+          v_dot= np.dot( R_NB, (f - b_f).transpose() ) + params.g_N
+          E_dot= np.dot( Q_BE, (w - b_w).transpose() )
+          b_f_dot= np.dot( -np.eye(3) / taua, b_f.transpose())
+          b_w_dot= np.dot( -np.eye(3) / tauw, b_w.transpose())
+          x_dot= np.concatenate((r_dot,v_dot,E_dot,b_f_dot,b_w_dot),axis=0)
           # udpate estimate
           self.XX[0:15]= self.XX[0:15] + params.dt_imu * x_dot
-          self.PX[0:15,0:15]= self.Phi_k * self.PX[0:15,0:15] * np.transpose(self.Phi_k) + self.D_bar
+          self.PX[0:15,0:15]= np.dot( np.dot(self.Phi_k, self.PX[0:15,0:15]), np.transpose(self.Phi_k) ) + self.D_bar
       # ----------------------------------------------
       # ----------------------------------------------
-      def yawUpdate(self,w,R,r_IMU2rearAxis):
+      def yaw_update(self,w,R,r_IMU2rearAxis):
 
           n_L= (XX.shape[0] - 15) / 2
           H= np.zeros((1, 15 + 2*n_L))
@@ -243,9 +242,10 @@ class EstimatorClassSlam:
       # ----------------------------------------------
       # ----------------------------------------------
       def gps_update(self, z, R, params):
+
           n_L= ((self.XX).shape[0] - 15) / 2
           # if we are fast enough --> use GPS velocity msmt
-          if (np.norm(z[3:6]) > params.min_vel_gps & params.SWITCH_GPS_VEL_UPDATE==1): # sense velocity
+          if (np.linalg.norm(z[3:6]) > params.min_vel_gps and params.SWITCH_GPS_VEL_UPDATE==1): # sense velocity
              R= np.diag( R )
              H= np.array([np.eye(6), np.zeros((6,9)), np.zeros(6,n_L*2)])
              print('GPS velocity')
@@ -253,15 +253,16 @@ class EstimatorClassSlam:
            # update only the position, no velocity
           else:
              z= z[0:3]
-             R= np.diag[ R[0:3] ]
-             H= np.array([np.eye(3), np.zeros((3,12)), np.zeros((3,n_L*2))])
+             R= np.diag( R[0:3] )
+             H= np.concatenate((np.concatenate((np.eye(3), np.zeros((3,12))),axis = 1), np.zeros((3,int(n_L*2)))),axis = 1)
              print('-------- no GPS velocity ---------')
 
           self.XX[8]= pi_to_pi.pi_to_pi( self.XX[8] )
-          L= self.PX*np.transpose(H) / (H*self.PX*np.transpose(H) + R)
-          innov= z - H*self.XX
-          self.XX= self.XX + L*innov
-          self.PX= self.PX - L*H*self.PX
+          print(np.shape(R))
+          L= np.dot( np.dot(self.PX, np.transpose(H)), np.linalg.inv( np.dot( np.dot(H, self.PX), np.transpose(H) ) + R) )
+          innov= z - np.dot( H, self.XX )
+          self.XX= self.XX + np.dot(L, innov)
+          self.PX= self.PX - np.dot( np.dot(L, H), self.PX)
       # ----------------------------------------------
       # ----------------------------------------------
       def lidarUpdate(self,z,association,params):
@@ -412,15 +413,15 @@ class EstimatorClassSlam:
           # Phi= sysd.A
 
           # Methdo to obtain covariance matrix for dicrete system
-          C= np.transpose([[-F, G*S*np.transpose(G)],[zeros(15), np.transpose(F)]])
+          C= np.transpose(np.concatenate((np.concatenate((-F, np.dot(G,np.dot(S,np.transpose(G)))),axis = 0),np.concatenate((np.zeros([15,15]), np.transpose(F)),axis = 0)),axis = 1))
 
           # Proper method
-          EXP= expm[C*dT]
-          self.Phi= np.transpose(EXP[15:,15:])
-          self.D_bar= Phi * EXP[0:15,15:]
+          EXP= expm(C*dT)
+          self.Phi_k= np.transpose(EXP[15:,15:])
+          self.D_bar= self.Phi_k * EXP[0:15,15:]
 
           # Simplified method
-          self.D_bar= (G*dT) * (S/dT) * np.transpose((G*dT)) # simplified version
+          self.D_bar= np.dot( np.dot( (G*dT) , (S/dT) ) , np.transpose((G*dT)) ) # simplified version
 
  
  # ----------------------------------------------
