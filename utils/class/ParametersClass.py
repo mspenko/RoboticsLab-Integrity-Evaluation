@@ -265,7 +265,7 @@ class ParametersClass:
            self.sig_yaw0 = np.deg2rad(para['sig_yaw0'])
            self.sig_phi0 = np.deg2rad(para['sig_phi0'])
            self.sig_ba = para['sig_ba']
-           self.sig_bw = para['sig_bw']
+           self.sig_bw = eval(para['sig_bw'])
            self.sig_virt_vz = para['sig_virt_vz']
            self.sig_virt_vy = para['sig_virt_vy']
            self.sig_lidar = para['sig_lidar']
@@ -369,7 +369,7 @@ class ParametersClass:
            self.V= np.diag( [self.sig_IMU_acc, self.sig_IMU_acc, self.sig_IMU_acc,self.sig_IMU_gyr, self.sig_IMU_gyr, self.sig_IMU_gyr])**2;       
 
            self.Sv= self.V * float(self.dt_imu); # Convert to PSD
-           self.Sv_cal= np.diag( [np.diag( self.Sv[0:2,0:2]) / self.mult_factor_acc_imu**2, np.diag(self.Sv[3:5,3:5]) / self.mult_factor_gyro_imu**2]  );
+           self.Sv_cal= np.diag( [np.diag( self.Sv[0:3,0:3]) / self.mult_factor_acc_imu**2, np.diag(self.Sv[3:6,3:6]) / self.mult_factor_gyro_imu**2]  );
 
            # Biases -- PSD of white noise
            self.Sn_f= np.diag([self.sn_f, self.sn_f, self.sn_f]);

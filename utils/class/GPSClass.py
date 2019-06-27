@@ -50,9 +50,9 @@ class GPSClass:
           self.R= np.transpose((np.array([sigPosX, sigPosY, sigPosZ, sigVelX, sigVelY, sigVelZ])**2))
           
           # Use initial position as reference
-          muX= np.mean(posX[1:numEpochStaticGPS])
-          muY= np.mean(posY[1:numEpochStaticGPS])
-          muZ= np.mean(posZ[1:numEpochStaticGPS])
+          muX= np.mean(posX[0:numEpochStaticGPS])
+          muY= np.mean(posY[0:numEpochStaticGPS])
+          muZ= np.mean(posZ[0:numEpochStaticGPS])
           self.msmt[:,0]= self.msmt[:,0] - muX
           self.msmt[:,1]= self.msmt[:,1] - muY
           self.msmt[:,2]= self.msmt[:,2] - muZ
@@ -70,7 +70,7 @@ class GPSClass:
           for i in range((self.time).shape[0]):
               self.R[i,:]= np.diag( R_NE_block * np.diag( self.R[i,:] ) * np.transpose(R_NE_block) )
           # increase GPS variance
-          self.R[:,0:2]= self.R[:,0:2]*(params.mult_factor_pose_gps**2); ################## CAREFUL
-          self.R[:,3:5]= self.R[:,3:5]*(params.mult_factor_vel_gps**2);  ################## CAREFUL
+          self.R[:,0:3]= self.R[:,0:3]*(params.mult_factor_pose_gps**2); ################## CAREFUL
+          self.R[:,3:6]= self.R[:,3:6]*(params.mult_factor_vel_gps**2);  ################## CAREFUL
           
      

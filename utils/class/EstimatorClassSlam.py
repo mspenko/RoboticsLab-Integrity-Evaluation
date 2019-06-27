@@ -17,7 +17,7 @@ class EstimatorClassSlam:
       XX= np.zeros((15,1))
       x_true= np.zeros((3,1))
       alpha =  None # state of interest extraction vector
-      PX= np.zeros((15))
+      PX= np.zeros((15,15))
                 
       association =  None # association of current features
       association_full =  None # association of current features
@@ -78,11 +78,11 @@ class EstimatorClassSlam:
           self.XX[params.ind_yaw]= np.deg2rad(params.initial_yaw_angle)
 
           # save initial attitude for calibration
-          self.initial_attitude= self.XX[6:8]
+          self.initial_attitude= self.XX[6:9]
 
           # initialize covariance
-          self.PX[9:11, 9:11]= np.diag( np.array([params.sig_ba,params.sig_ba,params.sig_ba]) )**2
-          self.PX[12:14, 12:14]= np.diag( np.array([params.sig_bw,params.sig_bw,params.sig_bw]) )**2
+          self.PX[9:12, 9:12]= np.diag( np.array([params.sig_ba,params.sig_ba,params.sig_ba]) )**2
+          self.PX[12:15, 12:15]= np.diag( np.array([params.sig_bw,params.sig_bw,params.sig_bw]) )**2
       # ----------------------------------------------
       # ----------------------------------------------                    
       def compute_alpha(self,params):
@@ -106,7 +106,7 @@ class EstimatorClassSlam:
           # phi=   -atan2( g_bar(2) , abs(g_bar(3)) )
       # ----------------------------------------------
       # ----------------------------------------------  
-
+      # This is the old version (Yihe, please update it)
       def linearize_discretize(self,u,S,taua,tauw,dT):
           global XX
           # Compute the F and G matrices (linear continuous time)
@@ -130,20 +130,20 @@ class EstimatorClassSlam:
           z= np.array([[np.zeros((6,1))],[ self.initial_attitude]])
 
           # Calibration msmt update
-          L= np.transpose(self.PX[0:14,0:14] * params.H_cal)/(params.H_cal*self.PX[0:14,0:14]*np.transpose(params.H_cal) + params.R_cal)
-          z_hat= params.H_cal * self.XX[0:14]
+          L= np.transpose(self.PX[0:15,0:15] * params.H_cal)/(params.H_cal*self.PX[0:15,0:15]*np.transpose(params.H_cal) + params.R_cal)
+          z_hat= params.H_cal * self.XX[0:15]
           innov= z - z_hat
           innov= pi_to_pi.pi_to_pi(innov)
-          self.XX[0:14]= self.XX[0:14] + L*innov
-          self.PX[0:14,0:14]= self.PX[0:14,0:14] - L * params.H_cal * self.PX[0:14,0:14]
+          self.XX[0:15]= self.XX[0:15] + L*innov
+          self.PX[0:15,0:15]= self.PX[0:15,0:15] - L * params.H_cal * self.PX[0:15,0:15]
 
           # linearize and discretize after every non-IMU update
           tmp = self.linearize_discretize( imu_msmt, params.dt_imu, params)
           self.Phi = tmp[0]
           self.D_bar = tmp[1]
           # If GPS is calibrating initial biases, increse bias variance
-          self.D_bar[9:11,9:11]= self.D_bar[9:11,9:11] + np.diag( [params.sig_ba,params.sig_ba,params.sig_ba] )**2
-          self.D_bar[12:14,12:14]= self.D_bar[12:15,12:14] + np.diag( [params.sig_bw,params.sig_bw,params.sig_bw] )**2
+          self.D_bar[9:12,9:12]= self.D_bar[9:12,9:12] + np.diag( [params.sig_ba,params.sig_ba,params.sig_ba] )**2
+          self.D_bar[12:15,12:15]= self.D_bar[12:15,12:15] + np.diag( [params.sig_bw,params.sig_bw,params.sig_bw] )**2
 
       # ----------------------------------------------
       # ----------------------------------------------  
@@ -151,14 +151,14 @@ class EstimatorClassSlam:
       def imu_update(self, imu_msmt, params ):
           # updates the state with the IMU reading, NO cov update
           # Create variables (for clarity)
-          v= self.XX[3:5]
+          v= self.XX[3:6]
           phi= self.XX[6]
           theta= self.XX[7] 
           psi= self.XX[8]
-          b_f= self.XX[9:11]
-          b_w= self.XX[12:14]
-          f= imu_msmt[0:2]
-          w= imu_msmt[3:5]
+          b_f= self.XX[9:12]
+          b_w= self.XX[12:15]
+          f= imu_msmt[0:3]
+          w= imu_msmt[3:6]
 
           if (params.SWITCH_CALIBRATION ==1):
              taua= params.taua_calibration
@@ -179,8 +179,8 @@ class EstimatorClassSlam:
           x_dot= np.array([r_dot,v_dot,E_dot,b_f_dot,b_w_dot])
 
           # udpate estimate
-          self.XX[0:14]= self.XX[0:14] + params.dt_imu * x_dot
-          self.PX[0:14,0:14]= self.Phi_k * self.PX[0:14,0:14] * np.transpose(self.Phi_k) + self.D_bar
+          self.XX[0:15]= self.XX[0:15] + params.dt_imu * x_dot
+          self.PX[0:15,0:15]= self.Phi_k * self.PX[0:15,0:15] * np.transpose(self.Phi_k) + self.D_bar
       # ----------------------------------------------
       # ----------------------------------------------
       def yawUpdate(self,w,R,r_IMU2rearAxis):
@@ -189,7 +189,7 @@ class EstimatorClassSlam:
           H= np.zeros((1, 15 + 2*n_L))
           H[8]= 1
 
-          R= params.R_yaw_fn( np.norm(self.XX[3:5]));
+          R= params.R_yaw_fn( np.norm(self.XX[3:6]));
           z= yawMeasurement(w,r_IMU2rearAxis)
           L= PX*np.transpose(H) / (H*PX*np.transpose(H) + R)
           innov= z - H*XX
@@ -201,7 +201,7 @@ class EstimatorClassSlam:
       # ----------------------------------------------
       def yawMeasurement(self, w, params):
           r= np.array([[-params.r_IMU2rearAxis],[0],[0]])
-          v_o= self.XX[3:5]
+          v_o= self.XX[3:6]
           R_NB= R_NB_rot.R_NB_rot( self.XX[6], self.XX[7], self.XX[8])
           v_a= v_o + R_NB * np.cross(w,r)
           v_a= v_a / np.norm(v_a)
@@ -239,15 +239,15 @@ class EstimatorClassSlam:
       def gps_update(self, z, R, params):
           n_L= ((self.XX).shape[0] - 15) / 2
           # if we are fast enough --> use GPS velocity msmt
-          if (np.norm(z[3:4]) > params.min_vel_gps & params.SWITCH_GPS_VEL_UPDATE==1): # sense velocity
+          if (np.norm(z[3:6]) > params.min_vel_gps & params.SWITCH_GPS_VEL_UPDATE==1): # sense velocity
              R= np.diag( R )
              H= np.array([np.eye(6), np.zeros((6,9)), np.zeros(6,n_L*2)])
              print('GPS velocity')
     
            # update only the position, no velocity
           else:
-             z= z[0:2]
-             R= np.diag[ R[0:2] ]
+             z= z[0:3]
+             R= np.diag[ R[0:3] ]
              H= np.array([np.eye(3), np.zeros((3,12)), np.zeros((3,n_L*2))])
              print('-------- no GPS velocity ---------')
 
@@ -262,14 +262,20 @@ class EstimatorClassSlam:
 
           
           R= params.R_lidar;
-          self.XX(8)= pi_to_pi.pi_to_pi( self.XX(8) );
+          self.XX[8]= pi_to_pi.pi_to_pi( self.XX[8] );
 
           if all(association == -1):
              return 0
 
           # Eliminate the non-associated features
           ind_to_eliminate= association == -1 or association == 0;
-          z= np.delete(z,(ind_to_eliminate,:))
+          print(ind_to_eliminate)
+          acc = 0
+          for i in ind_to_eliminate:
+              if (i == 1):
+                 z = np.delete(z,acc,axis = 0)
+              acc = acc+1
+          #z= np.delete(z,(ind_to_eliminate,:))
           association = np.delete(association,(ind_to_eliminate))
 
           # Eliminate features associated to landmarks that has appeared less than X times
@@ -285,7 +291,7 @@ class EstimatorClassSlam:
           acc=0
           for i in ind_to_eliminate:    #z(ind_to_eliminate,:)= [];
               if z[acc] == 1:
-                 a = np.delete(a,(acc,:))
+                 a = np.delete(a,acc,AXIS = 0)
               acc = acc+1
           
           acc = 0
@@ -318,8 +324,7 @@ class EstimatorClassSlam:
               dy= self.XX[indx[1]] - self.XX[1];
     
               # Predicted measurement
-              zHat[indz]= np.array([dx*cpsi + dy*spsi;
-                  -dx*spsi + dy*cpsi]);
+              zHat[indz]= np.array([[dx*cpsi + dy*spsi],[-dx*spsi + dy*cpsi]]);
     
               # Jacobian -- H
               H[indz,0]= np.array([[-cpsi],[ spsi]])
@@ -337,13 +342,13 @@ class EstimatorClassSlam:
 
           # If it is calibrating, update only landmarks
           if (params.SWITCH_CALIBRATION ==1):
-              XX0= self.XX[0:14];
-              PX0= self.PX[0:14,0:14];
+              XX0= self.XX[0:15];
+              PX0= self.PX[0:15,0:15];
               self.XX= self.XX + L*innov;
               self.PX= self.PX - L*H*self.PX;
-              self.XX[0:14]= XX0;
-              self.PX[0:14,0:14]= PX0;
-          else
+              self.XX[0:15]= XX0;
+              self.PX[0:15,0:15]= PX0;
+          else:
               self.XX= self.XX + L*innov;
               self.PX= self.PX - L*H*self.PX;
       # ----------------------------------------------
@@ -357,7 +362,7 @@ class EstimatorClassSlam:
           self.num_landmarks= self.num_landmarks + n_L;
 
           # Add new landmarks to state vector
-          z= body2nav_3D.body2nav_3D(z,self.XX[0:8]);
+          z= body2nav_3D.body2nav_3D(z,self.XX[0:9]);
           zVector= np.transpose(z)
           zVector= zVector[:]
           tmp0 = XX.shape[0]
@@ -374,7 +379,7 @@ class EstimatorClassSlam:
               dy= self.XX[ind[1]] - self.XX[1];
     
               H= np.array([[-cpsi, -spsi, -dx*spsi + dy*cpsi],[spsi,  -cpsi, -dx*cpsi - dy*spsi]]) 
-              Y= H * self.PX[0:1,8] * np.transpose(H) + R
+              Y= H * self.PX[0:2,8] * np.transpose(H) + R
               
               tmp0 = PX.shape[0]
               tmp1 = PX.shape[1]
@@ -406,24 +411,24 @@ class EstimatorClassSlam:
           # Proper method
           EXP= expm[C*dT]
           self.Phi= np.transpose(EXP[15:,15:])
-          self.D_bar= Phi * EXP[1:14,15:]
+          self.D_bar= Phi * EXP[0:15,15:]
 
           # Simplified method
-         self.D_bar= (G*dT) * (S/dT) * np.transpose((G*dT)) # simplified version
+          self.D_bar= (G*dT) * (S/dT) * np.transpose((G*dT)) # simplified version
 
  
  # ----------------------------------------------
  # ----------------------------------------------  
-      def yawMeasurement(self,w,r_IMU2rearAxis):
-          global XX
-
-          r= np.array([[-r_IMU2rearAxis],[0],[0]])
-          v_o= XX[3:5]
-          R_NB= R_NB_rot.R_NB_rot(XX[6],XX[7],XX[8])
-          v_a= v_o + R_NB * np.cross(w,r)
-          v_a= v_a / np.norm(v_a)
-          self.yaw= math.atan2(v_a[1],v_a[0]) 
-    
+ #      def yawMeasurement(self,w,r_IMU2rearAxis):
+ #          global XX
+ #
+ #          r= np.array([[-r_IMU2rearAxis],[0],[0]])
+ #          v_o= XX[3:6]
+ #          R_NB= R_NB_rot.R_NB_rot(XX[6],XX[7],XX[8])
+ #          v_a= v_o + R_NB * np.cross(w,r)
+ #          v_a= v_a / np.norm(v_a)
+ #          self.yaw= math.atan2(v_a[1],v_a[0]) 
+ #    
  # ----------------------------------------------
  # ----------------------------------------------       
 

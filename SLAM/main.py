@@ -18,6 +18,7 @@ gps= GPSClass.GPSClass(params.num_epochs_static * params.dt_imu, params);
 lidar= LidarClass.LidarClass(params,gps.timeInit);
 imu= IMUClass.IMUClass(params, gps.timeInit);
 estimator=  EstimatorClassSlam.EstimatorClassSlam(imu.inc_msmt[0:3, params.num_epochs_static], params);
+print('sfsdfsf')
 data_obj= DataClass.DataClass(302, gps.num_readings, params);#imu.num_readings
 counters= CountersClass.CountersClass(gps, lidar, params);
 
