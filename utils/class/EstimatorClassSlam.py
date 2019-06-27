@@ -107,16 +107,22 @@ class EstimatorClassSlam:
       # ----------------------------------------------
       # ----------------------------------------------  
       # This is the old version (Yihe, please update it)
-      def linearize_discretize(self,u,S,taua,tauw,dT):
-          global XX
+      def linearize_discretize(self,u, dT, params):
+          
+          if (params.SWITCH_CALIBRATION==1):
+             taua= params.taua_calibration;
+             tauw= params.tauw_calibration;
+             S= params.S_cal;
+          else:
+             taua= params.taua_normal_operation;
+             tauw= params.tauw_normal_operation;
+             S= params.S;
+
           # Compute the F and G matrices (linear continuous time)
-          tmp= FG_fn.FG_fn(u[0],u[1],u[2],u[4],u[5],XX[6],XX[7],XX[8],XX[9],XX[10],XX[11],XX[13],XX[14],taua,tauw)
-          F = tmp[0]
-          G = tmp[1]
+          np.array([F,G])=FG_fn(u[0],u[1],u[2],u[4],u[5],self.XX[6],self.XX[7],self.XX[8],self.XX[9],self.XX[10],self.XX[11],self.XX[13],self.XX[14],taua,tauw);
+
           # Discretize system for IMU time (only for variance calculations)
-          tmp =discretize(F, G, S, dT)
-          self.Phi = tmp[0]
-          self.D_bar = tmp[1]
+         self.discretize(F, G, S, dT);
 
           
       # ----------------------------------------------
