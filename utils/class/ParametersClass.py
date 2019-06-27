@@ -408,23 +408,21 @@ class ParametersClass:
       #------------------------------------------------------
       #------------------------------------------------------
       def return_random_map(self):
-          x_dim= selfmap_limits(2) - selfmap_limits(1);
-          y_dim= selfmap_limits(4) - selfmap_limits(3);
+          x_dim= self.map_limits(2) - self.map_limits(1);
+          y_dim= self.map_limits(4) - self.map_limits(3);
           map_area= x_dim * y_dim;
           num_landmarks= round(selflandmark_density * map_area);
-          landmark_map= [np.random.rand( num_landmarks, 1 ) * x_dim + selfmap_limits(1),
-                           np.random.rand( num_landmarks, 1 ) * y_dim + selfmap_limits(3)];
-          return landmark_map
+          self.landmark_map= [np.random.rand( num_landmarks, 1 ) * x_dim + self.map_limits(1),
+                           np.random.rand( num_landmarks, 1 ) * y_dim + self.map_limits(3)];
       #------------------------------------------------------
       #------------------------------------------------------
-      def sig_yaw_fn(v):
-          sig_yaw= np.deg2rad(5) + ( exp(10*v)-1 )^(-1); #6.6035  ############################ CAREFUL
-          return sig_yaw
+      def sig_yaw_fn(self,v):
+          self.sig_yaw= np.deg2rad(5) + ( np.exp(10*v)-1 )**(-1); #6.6035  ############################ CAREFUL
       #------------------------------------------------------
       #------------------------------------------------------
       def R_yaw_fn(self, v):
-          R_yaw= self.sig_yaw_fn(v)**2;
-          return R_yaw
+          self.R_yaw= self.sig_yaw_fn(v)**2;
+          
       #------------------------------------------------------
       #------------------------------------------------------
       def turn_off_calibration(self):

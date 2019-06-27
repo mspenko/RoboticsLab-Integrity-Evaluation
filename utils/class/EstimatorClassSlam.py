@@ -188,20 +188,20 @@ class EstimatorClassSlam:
           self.PX[0:15,0:15]= np.dot( np.dot(self.Phi_k, self.PX[0:15,0:15]), np.transpose(self.Phi_k) ) + self.D_bar
       # ----------------------------------------------
       # ----------------------------------------------
-      def yaw_update(self,w,R,r_IMU2rearAxis):
+      def yaw_update(self,w, params):
 
-          n_L= (XX.shape[0] - 15) / 2
-          H= np.zeros((1, 15 + 2*n_L))
-          H[8]= 1
-
-          R= params.R_yaw_fn( np.norm(self.XX[3:6]));
+          n_L= (self.XX.shape[0] - 15) / 2
+          H= np.zeros((1, 15 + int(2*n_L)))
+          H[0,8]= 1
+          print(np.linalg.norm(self.XX[3:6]))
+          R= params.R_yaw_fn( np.linalg.norm(self.XX[3:6]));
           z= yawMeasurement(w,r_IMU2rearAxis)
-          L= PX*np.transpose(H) / (H*PX*np.transpose(H) + R)
-          innov= z - H*XX
+          L= self.PX*np.transpose(H) / (H*self.PX*np.transpose(H) + R)
+          innov= z - H*self.XX
           innov= pi_to_pi.pi_to_pi(innov)
-          self.XX[8]= pi_to_pi.pi_to_pi(XX[8])
-          self.XX= XX + L*innov
-          self.PX= PX - L*H*PX
+          self.XX[8]= pi_to_pi.pi_to_pi(self.XX[8])
+          self.XX= self.XX + L*innov
+          self.PX= self.PX - L*H*self.PX
       # ----------------------------------------------
       # ----------------------------------------------
       def yawMeasurement(self, w, params):
