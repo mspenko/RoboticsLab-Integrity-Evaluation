@@ -6,6 +6,9 @@ from scipy.optimize import fminbound
 from scipy.optimize import minimize
 from scipy.special import comb
 from scipy.stats.distributions import chi2
+from scipy.sparse.linalg import eigs
+from scipy.stats import ncx2
+
 class IntegrityMonitoringCLassEkfExp:
       m= 3
       calculate_A_M_recursively = 0
@@ -445,18 +448,96 @@ class IntegrityMonitoringCLassEkfExp:
           elif (self.n_L_M - self.n_max < 2):
              self.kappa= 1;
              self.mu_k= np.dot(self.kappa,( np.sqrt(self.T_d) - mp.sqrt( chi.ppf(1 - params.I_MA , self.n_M) ) )**2);
-          # compute Q matrix with A_M_(k-1) , Phi_(k-1), P_k, n_M_(k-1)
-          Q= self.A_M' * self.Phi_ph{1}' * estimator.PX(params.ind_pose, params.ind_pose) * self.Phi_ph{1} * self.A_M;
+          else:
+              # compute Q matrix with A_M_(k-1) , Phi_(k-1), P_k, n_M_(k-1)
+              Q= np.dot(np.dot(np.dot(np.dot(np.transpose(self.A_M) * np.transpose(self.Phi_ph[1])) * estimator.PX[params.ind_pose, params.ind_pose]) * self.Phi_ph[1]) * self.A_M);
     
-    self.kappa= 0;
-    C = nchoosek(1:self.n_L_M,self.n_max);#set of possible fault indices for n_max simultanous faults
-    for i= 1:size(C,1)
-        # build extraction matrix
-        self.compute_E_matrix(C(i,:), params.m_F);
-        kappa_H= eigs( self.E*Q*self.E', 1) * eigs( self.E*self.M_M*self.E', 1, 'smallestabs');
-        # take the largest kappa
-        if kappa_H > self.kappa, self.kappa= kappa_H; end
-    end
-    self.mu_k= self.kappa * ( sqrt(self.T_d) - sqrt( chi2inv(1 - params.I_MA , self.n_M) ) )^2;
-          
+              self.kappa= 0;
+              C = comb(self.n_L_M[1,:],self.n_max);#set of possible fault indices for n_max simultanous faults
+              for i in range(C.shape[1]):
+                  # build extraction matrix
+                  self.compute_E_matrix(C[i,:], params.m_F);
+                  kappa_H= eigs( np.transpose(np.dot(np.dot(self.E,Q),self.E)), 1) * eigs( np.dot(np.dot(self.E,self.M_M),np.transpose(self.E)), 1);
+                  # take the largest kappa
+                  if (kappa_H > self.kappa):
+                     self.kappa= kappa_H
+              self.mu_k= np.dot(self.kappa ,( np.sqrt(self.T_d) - np.sqrt( chi2.ppf[1 - params.I_MA , self.n_M] ) )**2);
+           
+          #loop through each associated landmark
+          for t in range (1,estimator.association_no_zeros.shape[0]):
+              # take the landmark ID
+              lm_id_t= estimator.association_no_zeros(t);
+    
+              # initialize the P(MA)
+              self.P_MA_k[t]= estimator.FoV_landmarks_at_k.shape[0] - 1;
+    
+              # build the necessary parameters
+              landmark= estimator.landmark_map[ lm_id_t ,: ];
+              dx= landmark[0] - estimator.XX[0];
+              dy= landmark[1] - estimator.XX[1];
+              h_t[1]=  dx*cpsi + dy*spsi;
+              h_t[2]= -dx*spsi + dy*cpsi;
+ 
+              # loop through every possible landmark in the FoV (potential MA)
+              for l in range(1,estimator.FoV_landmarks_at_k.shape[0]):
+                  # take landmark ID
+                  lm_id_l= estimator.FoV_landmarks_at_k[l];
+                  if (lm_id_t != lm_id_l):
+                     # extract the landmark
+                     landmark= estimator.landmark_map[lm_id_l ,: ];         
 
+                     # compute necessary intermediate parameters
+                     dx= landmark[0] - estimator.XX[0];
+                     dy= landmark[1] - estimator.XX[1];
+                     h_l[0]=  dx*cpsi + dy*spsi;
+                     h_l[1]= -dx*spsi + dy*cpsi;
+                     H_l= np.array([[-cpsi, -spsi, -dx*spsi + dy*cpsi],[spsi, -cpsi, -dx*cpsi - dy*spsi]])
+                     y_l_t= h_l - h_t;
+                     Y_l= np.dot(np.dot(H_l,estimator.PX(params.ind_pose, params.ind_pose)),np.transpose(H_l)) + params.R_lidar;
+
+                     # individual innovation norm between landmarks l and t
+                     IIN_l_t= np.sqrt( np.dot(np.dot(np.transpose(y_l_t),np.inv(Y_l)),y_l_t) );
+            
+                     # if one of the landmarks is too close to ensure P(MA) --> set to one
+                     if (IIN_l_t < sqrt(params.T_NN)):
+                         self.P_MA_k[t]= 1;
+                         break
+                     else:
+                         self.P_MA_k[t]= self.P_MA_k[t] - ncx2.cdf( ( IIN_l_t - np.sqrt(params.T_NN) )**2 , chi_dof, self.mu_k );
+                   
+               # store the P_MA for the full LMs
+              self.P_MA_k_full[t]= self.P_MA_k[t];
+    
+              # landmark selection
+              if (params.SWITCH_LM_SELECTION==1):
+                  if (self.P_MA_k[t] > params.P_MA_max):
+                      self.P_MA_k[t]= -1;
+                      estimator.association_no_zeros[t]= -1;
+                      tmp = []
+                      acc = 0
+                      for i in estimator.association:
+                          if(i == lm_id_t):
+                            tmp.append(0)
+                          acc = acc+1
+                      estimator.association[ tmp ]= 0;
+    
+               # not more than probability one
+              if (self.P_MA_k[t] > 1):
+                  self.P_MA_k[t]= 1
+
+          # remove non-associated ones
+          if (params.SWITCH_LM_SELECTION == 1):
+              tmp = []
+              acc = 0
+              for i in self.P_MA_K:
+                  if(i == -1):
+                    tmp.append(acc)
+                  acc = acc+1 
+              self.P_MA_k = np.delete(self.P_MA_K,tmp,axis = 0)
+              tmp = []
+              acc = 0
+              for i in estimator.association_no_zeros:
+                  if(i == -1):
+                    tmp.append(acc)
+                  acc = acc+1 
+              estimator.association_no_zeros = np.delete(estimator.association_no_zeros,tmp,axis = 0)
