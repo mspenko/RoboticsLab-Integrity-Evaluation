@@ -4,6 +4,7 @@ import sys
 sys.path.insert(0,'../functions/')
 import ecef2lla
 from scipy.linalg import block_diag
+import scipy.io as sio
 
 class GPSClass:
     
@@ -23,10 +24,12 @@ class GPSClass:
              return 0
           numEpochStaticGPS = math.ceil(timeStatic)
           dtype1 = np.dtype([('0','f8'),('1','f8'),('2','f8'),('3','f8'),('4','f8'),('5','f8'),('6','f8'),('7','f8'),('8','f8'),('9','f8'),('10','f8')])
-          data = np.loadtxt(params.file_name_gps)
-          
+          data = sio.loadmat(params.file_name_gps)
+          data = data['data']
           self.num_readings= data.shape[0]
           self.time = data[:,3]
+         # print(self.time)
+          #a = input("fuck you?")
           posX=     data[:,4]
           posY=     data[:,5]
           posZ=     data[:,6]

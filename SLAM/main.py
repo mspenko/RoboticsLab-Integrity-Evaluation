@@ -67,7 +67,7 @@ for epoch in range(imu.num_readings-1):
     # ---------------------------------------------------------
 
     # ------------- virtual msmt update >> Y vel  -------------  
-    if( counters.time_sum_virt_y >= params.dt_virt_y and params.SWITCH_VIRT_UPDATE_Y and ~params.SWITCH_CALIBRATION):
+    if( counters.time_sum_virt_y >= params.dt_virt_y and params.SWITCH_VIRT_UPDATE_Y and params.SWITCH_CALIBRATION==0):
          
         # Yaw update
         if (params.SWITCH_YAW_UPDATE==1 and np.norm(estimator.XX[3:6]) > params.min_vel_yaw):
@@ -106,7 +106,7 @@ for epoch in range(imu.num_readings-1):
         
         if (epoch > 2000): #params.num_epochs_static - 3000
             # Read the lidar features
-            epochLIDAR= lidar.time(counters.k_lidar,1);
+            epochLIDAR= lidar.time[counters.k_lidar,0];
             lidar.get_msmt( epochLIDAR, params );
             
             # Remove people-features for the data set
@@ -122,7 +122,7 @@ for epoch in range(imu.num_readings-1):
             estimator.increase_landmarks_cov(params.R_minLM);
             
             # Add new landmarks
-            estimator.addNewLM( lidar.msmt[np.transpose(association) == -1,:], params.R_lidar );
+            estimator.addNewLM( lidar.msmt[np.transpose(associastion) == -1,:], params.R_lidar );
             
             # Lineariza and discretize
             estimator.linearize_discretize( imu.msmt[:,epoch], params.dt_imu, params);
@@ -130,14 +130,13 @@ for epoch in range(imu.num_readings-1):
             # Store data
             data_obj.store_msmts( body2nav_3D(lidar.msmt, estimator.XX[0:9]) );# Add current msmts in Nav-frame
             counters.k_update= data_obj.store_update(counters.k_update, estimator, counters.time_sim);
-        end
         
         # Increase counters
         counters.increase_lidar_counter();
         
         # -----Osama----- TODO: osama, what is this again?
-        if (counters.k_lidar <= length(lidar.time)):
-            counters.time_lidar= lidar.time(counters.k_lidar,2);
+        if (counters.k_lidar <= lidar.time.shape[0]):
+            counters.time_lidar= lidar.time[counters.k_lidar,1];
         else:
            counters.k_lidar = counters.k_lidar -1 ;
            LIDAR_Index_exceeded = 1;

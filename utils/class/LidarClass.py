@@ -4,6 +4,7 @@ from scipy.linalg import block_diag
 from scipy.linalg import sqrtm
 from scipy.linalg import inv
 from scipy.stats.distributions import chi2
+import scipy.io as sio
 import math
 import sys
 sys.path.insert(0,'../functions/')
@@ -31,9 +32,13 @@ class LidarClass():
 
           # substracts the GPS start time which is used as reference    
           # load the variable "T_LIDAR"
-          self.time = np.loadtxt(params.file_name_lidar_path+'T_LIDAR.txt')
+          #self.time = np.loadtxt(params.file_name_lidar_path+'T_LIDAR.mat')
+          self.time = sio.loadmat(params.file_name_lidar_path+'T_LIDAR.mat')
+          self.time = self.time['T_LIDAR']
           try:
-            self.areas_to_remove = np.loadtxt(params.file_name_lidar_path+'areas_to_remove.txt')
+            #self.areas_to_remove = np.loadtxt(params.file_name_lidar_path+'areas_to_remove.mat')
+             self.areas_to_remove = sio.loadmat(params.file_name_lidar_path+'areas_to_remove.mat')
+             self.areas_to_remove = self.areas_to_remove['areas_to_remove']
           except:
              print("[MSG] no area to remove")
           #Use the GPS first reading time as reference
@@ -52,51 +57,53 @@ class LidarClass():
       # ----------------------------------------------
       # ----------------------------------------------
       def get_msmt(self,epoch,params):
+
             # load the mat file with the extrated features at the lidar epoch specified
-            fileName = params.file_name_lidar_path+'matFiles/Epoch'+str(epoch)+'.txt'
+            fileName = params.file_name_lidar_path+'textFiles/Epoch'+str(int(epoch))+'.txt'
             # loads the z variable with range and bearing
             self.msmt= np.loadtxt(fileName) 
             # if there are features --> prepare the measurement
-            if (self.msmt != None):
+            if (self.msmt.shape[0] !=0):
                 if (params.SWITCH_REMOVE_FAR_FEATURES==1):
                     self.remove_far_features(params.lidarRange)
                 # Add height
-                self.msmt= np.array([self.msmt, np.ones((size(self.msmt,1),1)) * params.feature_height]) 
-            
+                #self.msmt= np.array([self.msmt, np.ones((self.msmt.shape[1],1)) * params.feature_height]) 
+                self.msmt = np.concatenate((self.msmt,np.dot(np.ones((self.msmt.shape[0],1)), params.feature_height)),axis = 1)
       # ----------------------------------------------
       # ----------------------------------------------
       def remove_far_features(self,lidarRange):
           # removes extracted features farther than "lidarRange"
           d= self.msmt[:][0]**2 + self.msmt[:][1]**2 
-          self.msmt[ d > lidarRange**2][:]= [] 
+          acc = 0
+          for i in d:
+              if(i>lidarRange**2):
+                self.msmt =np.delete(self.msmt,acc,axis = 0)
+              acc = acc+1
+          #self.msmt[ d > lidarRange**2][:]= [] 
       # ----------------------------------------------
       # ----------------------------------------------
       def remove_features_in_areas(self,x):
             # remove features from areas, each area is: [minX, maxX, minY, maxY]
-            
             # Remove people-features for the data set 
-            counter = 0
-            while(i< self.areas_to_remove.shape[0]):
+            i = 0
+            while( i< self.areas_to_remove.shape[0]):
                 area= self.areas_to_remove[i,:] 
                 
                 # transform to nav-frame first
-                msmt_nav_frame= body2nav_3D(self.msmt,x)
+                msmt_nav_frame= body2nav_3D.body2nav_3D(self.msmt,x)
                 
                 # Remove people-features
-                inX  = []
+                #inX= (msmt_nav_frame(:,0) > area(0)) & (msmt_nav_frame(:,0) < area(1)) 
+                inX = []
                 for i in msmt_nav_frame:
-                    if(msmt_nav_frame[i,0]>area[0]):
-                       if(msmt_nav_frame[i,0] < area[1]): #inX= (msmt_nav_frame(:,0) > area(0)) & (msmt_nav_frame(:,0) < area(1)) 
-                          inX.append(1)
-                       else:
-                          inX.append(0)
+                    if(i>area[0] and i<area[1]):
+                      inX.append(i)
+
+                #inY= (msmt_nav_frame(:,1) > area(2)) & (msmt_nav_frame(:,1) < area(3))
                 inY = []
                 for i in msmt_nav_frame:
-                    if(msmt_nav_frame[i,1]>area[2]):
-                       if(msmt_nav_frame[i,1] < area[3]): #inY= (msmt_nav_frame(:,1) > area(2)) & (msmt_nav_frame(:,1) < area(3)) 
-                          inY.append(1)
-                       else:
-                          inY.append(0)
+                    if(i>area[2] and i<area[3]):
+                      inY.append(i)
                 inX,inY = np.array(inX),np.array(inY)
 
                 tmp_list = []
@@ -105,4 +112,4 @@ class LidarClass():
                        tmp_list.append(1)
                       
                 self.msmt = np.array(tmp_list)
-                counter = counter+1 
+                i = i+1 

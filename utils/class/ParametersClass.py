@@ -322,10 +322,10 @@ class ParametersClass:
            # -------------------------------------------
             
            # set file names
-           self.file_name_imu= self.path + 'IMU/IMU.txt'
-           self.file_name_gps= self.path + 'GPS/GPS.txt'
+           self.file_name_imu= self.path + 'IMU/IMU.mat'
+           self.file_name_gps= self.path + 'GPS/GPS.mat'
            self.file_name_lidar_path= self.path + 'LIDAR/'
-           self.file_name_calibration= self.path + 'IMU/calibration.txt'
+           self.file_name_calibration= self.path + 'IMU/calibration.mat'
 
            # modify parameters
            self.VRW= self.VRW * self.mult_factor_acc_imu 

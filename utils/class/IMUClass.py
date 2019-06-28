@@ -1,6 +1,7 @@
 from scipy.linalg import block_diag
 import numpy as np
 import math
+import scipy.io as sio
 
 class IMUClass:
       num_readings = None
@@ -13,7 +14,9 @@ class IMUClass:
          # Data id in columns
  
          # load "data" for the IMU
-         data = np.loadtxt(params.file_name_imu)
+         #data = np.loadtxt(params.file_name_imu)
+         data = sio.loadmat(params.file_name_imu)
+         data = data['data']
          g0= 9.80665 # m/s^2 -- by manufacturerw -- TODO: include in parameters
    
          self.time= data[:,3]
