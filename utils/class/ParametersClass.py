@@ -33,7 +33,7 @@ class ParametersClass:
       SWITCH_OFFLINE= 0
 
       path_test= '../../data/cart/20180725/'
-      path_test= '../data/vehicle/20190110/'    #注意这个地方，去掉1个'../'
+      path_test= '../data/vehicle/20190110/'
       path_sim_kf= '../data/simulation/straight/'
       path_sim= '../../data/simulation/square/'
       path_sim_fg= '../../data/simulation/factor_graph/'
@@ -339,7 +339,7 @@ class ParametersClass:
               None
 
            if(self.SWITCH_SIM == 1):
-                self.ind_pose= np.array([0,1,2]) #注意
+                self.ind_pose= np.array([0,1,2])
                 self.ind_yaw= 3
            else:
                 self.ind_pose = np.array([1,2,9])

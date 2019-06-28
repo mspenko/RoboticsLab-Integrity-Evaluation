@@ -29,7 +29,6 @@ class GPSClass:
           self.num_readings= data.shape[0]
           self.time = data[:,3]
          # print(self.time)
-          #a = input("fuck you?")
           posX=     data[:,4]
           posY=     data[:,5]
           posZ=     data[:,6]
@@ -52,11 +51,11 @@ class GPSClass:
           # create variables
           self.msmt= np.transpose(np.array([posX, posY, posZ, velX, velY, velZ]))
           self.R= np.transpose((np.array([sigPosX, sigPosY, sigPosZ, sigVelX, sigVelY, sigVelZ])**2))
-          
+
           # Use initial position as reference
-          muX= np.mean(posX[0:numEpochStaticGPS])
-          muY= np.mean(posY[0:numEpochStaticGPS])
-          muZ= np.mean(posZ[0:numEpochStaticGPS])
+          muX= np.mean(posX[0:int(numEpochStaticGPS)])
+          muY= np.mean(posY[0:int(numEpochStaticGPS)])
+          muZ= np.mean(posZ[0:int(numEpochStaticGPS)])
           self.msmt[:,0]= self.msmt[:,0] - muX
           self.msmt[:,1]= self.msmt[:,1] - muY
           self.msmt[:,2]= self.msmt[:,2] - muZ
