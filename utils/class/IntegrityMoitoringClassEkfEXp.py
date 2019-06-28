@@ -5,6 +5,7 @@ from scipy.stats.distributions import chi2
 from scipy.optimize import fminbound
 from scipy.optimize import minimize
 from scipy.special import comb
+from scipy.stats.distributions import chi2
 class IntegrityMonitoringCLassEkfExp:
       m= 3
       calculate_A_M_recursively = 0
@@ -423,4 +424,39 @@ class IntegrityMonitoringCLassEkfExp:
                     self.Lpp_ph=   np.concatenate((self.Lpp_k,self.Lpp_ph[1:self.Lpp_ph[self.Lpp_ph.shape[0]]-1]),axis  = 0);
                     self.Y_ph=     np.concatenate((estimator.Y_k,self.Y_ph[1:self.Y_ph[self.Y_ph.shape[0]]-1]),axis =0);
                     self.P_MA_ph=  np.concatenate((self.P_MA_k,self.P_MA_ph[1:self.P_MA_p[self.P_MA_p.shape[0]]-1]),axis = 0);
+      #--------------------------------------------------------------------------
+      #--------------------------------------------------------------------------
+      def prob_of_MA(self, estimator, params):
+          # dof of the non-central chi-square in the P(MA)
+          chi_dof= self.m + params.m_F;
+
+          # allocate memory
+          spsi= math.sin(estimator.XX[params.ind_yaw]);
+          cpsi= math.cos(estimator.XX[params.ind_yaw]);
+          h_t= np.zeros((2,1));
+          h_l= np.zeros((2,1));
+          estimator.association_no_zeros= estimator.association( estimator.association != 0);
+          self.P_MA_k= np.ones(estimator.association_no_zeros.shape[0]) * (-1);
+          self.P_MA_k_full= self.P_MA_k;
+
+          # compute kappa
+          if (self.A_M.shape[0] == 0):
+             self.mu_k = 0;
+          elif (self.n_L_M - self.n_max < 2):
+             self.kappa= 1;
+             self.mu_k= np.dot(self.kappa,( np.sqrt(self.T_d) - mp.sqrt( chi.ppf(1 - params.I_MA , self.n_M) ) )**2);
+          # compute Q matrix with A_M_(k-1) , Phi_(k-1), P_k, n_M_(k-1)
+          Q= self.A_M' * self.Phi_ph{1}' * estimator.PX(params.ind_pose, params.ind_pose) * self.Phi_ph{1} * self.A_M;
+    
+    self.kappa= 0;
+    C = nchoosek(1:self.n_L_M,self.n_max);#set of possible fault indices for n_max simultanous faults
+    for i= 1:size(C,1)
+        # build extraction matrix
+        self.compute_E_matrix(C(i,:), params.m_F);
+        kappa_H= eigs( self.E*Q*self.E', 1) * eigs( self.E*self.M_M*self.E', 1, 'smallestabs');
+        # take the largest kappa
+        if kappa_H > self.kappa, self.kappa= kappa_H; end
+    end
+    self.mu_k= self.kappa * ( sqrt(self.T_d) - sqrt( chi2inv(1 - params.I_MA , self.n_M) ) )^2;
+          
 
