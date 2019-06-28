@@ -421,7 +421,56 @@ class EstimatorClassSlam:
           # Simplified method
           self.D_bar= np.dot( np.dot( (G*dT) , (S/dT) ) , np.transpose((G*dT)) ) # simplified version
 
+      # ----------------------------------------------
+      # ----------------------------------------------
+      def nearest_neighbor(obj, z, params):
+
+          n_F= z.shape[1];
+          n_L= (obj.XX.shape[0] - 15) / 2;
+
+          association= np.ones(1,n_F) * (-1);
+
+          if (n_F == 0 or n_L == 0):
+             return 0
  
+          spsi= math.sin(obj.XX[9]);
+          cpsi= math.cos(obj.XX[9]);
+          zHat= np.zeros((2,1));
+          # Loop over extracted features
+          for i in range(n_F):
+              minY= params.threshold_new_landmark;
+    
+              for l in range(n_L):
+                  ind= (15 + (2*l-1)):(15 + 2*l);
+        
+                  dx= obj.XX[ind[0]] - obj.XX[0];
+                  dy= obj.XX[ind[1]] - obj.XX[1];
+        
+                  zHat(1)=  dx*cpsi + dy*spsi;
+                  zHat(2)= -dx*spsi + dy*cpsi;
+                  gamma= np.transpose(z[i,:]) - zHat;
+        
+                  H= np.array([[-cpsi, -spsi, -dx*spsi + dy*cpsi,  cpsi, spsi],
+                      [spsi, -cpsi, -dx*cpsi - dy*spsi, -spsi, cpsi]]);
+        
+                  Y= np.dot(np.dot(H,obj.PX(0:1,8,ind],[0:1,8,ind])),np.transpose(H)) + params.R_lidar;
+        
+                  y2= np.dot(np.dot(np.transpose(gamma),inv(Y)),gamma);
+        
+                  if (y2 < minY):
+                      minY= y2;
+                      association[i]= l;
+
+              # If the minimum value is very large --> new landmark
+              if (minY > params.T_NN and minY < params.threshold_new_landmark):
+                  association[i]= 0;
+
+
+          # Increase appearances counter
+          for i in range(n_F):
+              if (association[i] != -1 and association[i] != 0):
+                  obj.appearances[association[i]]= obj.appearances[association[i]] + 1;
+          return association
  # ----------------------------------------------
  # ----------------------------------------------  
  #      def yawMeasurement(self,w,r_IMU2rearAxis):
@@ -435,6 +484,7 @@ class EstimatorClassSlam:
  #          self.yaw= math.atan2(v_a[1],v_a[0]) 
  #    
  # ----------------------------------------------
- # ----------------------------------------------       
+ # ----------------------------------------------     
+# =====================================================================================    
 
 
