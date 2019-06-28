@@ -24,6 +24,7 @@ class GPSClass:
           numEpochStaticGPS = math.ceil(timeStatic)
           dtype1 = np.dtype([('0','f8'),('1','f8'),('2','f8'),('3','f8'),('4','f8'),('5','f8'),('6','f8'),('7','f8'),('8','f8'),('9','f8'),('10','f8')])
           data = np.loadtxt(params.file_name_gps)
+          
           self.num_readings= data.shape[0]
           self.time = data[:,3]
           posX=     data[:,4]

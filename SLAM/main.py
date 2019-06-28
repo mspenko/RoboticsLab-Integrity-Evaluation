@@ -18,7 +18,7 @@ gps= GPSClass.GPSClass(params.num_epochs_static * params.dt_imu, params);
 lidar= LidarClass.LidarClass(params,gps.timeInit);
 imu= IMUClass.IMUClass(params, gps.timeInit);
 estimator=  EstimatorClassSlam.EstimatorClassSlam(imu.inc_msmt[0:3, params.num_epochs_static], params);
-data_obj= DataClass.DataClass(302, gps.num_readings, params);#imu.num_readings
+data_obj= DataClass.DataClass(50000, gps.num_readings, params);#imu.num_readings
 counters= CountersClass.CountersClass(gps, lidar, params);
 
 GPS_Index_exceeded = 0;   # TODO: osama is this needeed?
@@ -70,23 +70,22 @@ for epoch in range(imu.num_readings-1):
     if( counters.time_sum_virt_y >= params.dt_virt_y and params.SWITCH_VIRT_UPDATE_Y and ~params.SWITCH_CALIBRATION):
          
         # Yaw update
-        if (params.SWITCH_YAW_UPDATE==1 and np.norm(estimator.XX[3:5]) > params.min_vel_yaw):
-            print('yaw udpate');
-            estimator.yaw_update( imu.msmt[3:5,epoch], params);
+        if (params.SWITCH_YAW_UPDATE==1 and np.norm(estimator.XX[3:6]) > params.min_vel_yaw):
+            print('yaw update');
+            estimator.yaw_update( imu.msmt[3:6,epoch], params);
         counters.reset_time_sum_virt_y();
     # ---------------------------------------------------------
-
+    
     # ------------------- GPS -------------------
     if ((counters.time_sim + params.dt_imu) > counters.time_gps and GPS_Index_exceeded == 0):
         
         if (params.SWITCH_CALIBRATION==0 and params.SWITCH_GPS_UPDATE==1):
             # GPS update -- only use GPS vel if it's fast
-            estimator.gps_update( gps.msmt[:,counters.k_gps], gps.R[:,counters.k_gps], params);
-            
+            estimator.gps_update( gps.msmt[:,counters.k_gps], gps.R[counters.k_gps,:], params);
             # Yaw update
-            if (params.SWITCH_YAW_UPDATE and np.linalg.norm(estimator.XX[3:5]) > params.min_vel_yaw):
-                print('yaw udpate');
-                estimator.yaw_update( imu.msmt[3:5,epoch], params );
+            if (params.SWITCH_YAW_UPDATE and np.linalg.norm(estimator.XX[3:6]) > params.min_vel_yaw):
+                print('yaw update');
+                estimator.yaw_update( imu.msmt[3:6,epoch], params );
             #estimator.linearize_discretize( imu.msmt[:,epoch], params.dt_imu, params);
 
             # Store data
@@ -96,7 +95,7 @@ for epoch in range(imu.num_readings-1):
         counters.increase_gps_counter();
         
         # -----Osama----- TODO: Osama what is this??
-        if (counters.k_gps <= gps.time.shape[1]):
+        if (counters.k_gps < gps.time.shape[0]):
             counters.time_gps= gps.time[counters.k_gps];
         else:
            counters.k_gps = counters.k_gps -1 ;
@@ -111,13 +110,13 @@ for epoch in range(imu.num_readings-1):
             lidar.get_msmt( epochLIDAR, params );
             
             # Remove people-features for the data set
-            lidar.remove_features_in_areas(estimator.XX[0:8]);
+            lidar.remove_features_in_areas(estimator.XX[0:9]);
             
             # NN data association
-            association= estimator.nearest_neighbor(lidar.msmt[:,0:1], params);
+            association= estimator.nearest_neighbor(lidar.msmt[:,0:2], params);
             
             # Lidar update
-            estimator.lidar_update(lidar.msmt[:,0:1], association, params);
+            estimator.lidar_update(lidar.msmt[:,0:2], association, params);
 
             # Increase landmark covariance to the minimum
             estimator.increase_landmarks_cov(params.R_minLM);
@@ -129,7 +128,7 @@ for epoch in range(imu.num_readings-1):
             estimator.linearize_discretize( imu.msmt[:,epoch], params.dt_imu, params);
             
             # Store data
-            data_obj.store_msmts( body2nav_3D(lidar.msmt, estimator.XX[0:8]) );# Add current msmts in Nav-frame
+            data_obj.store_msmts( body2nav_3D(lidar.msmt, estimator.XX[0:9]) );# Add current msmts in Nav-frame
             counters.k_update= data_obj.store_update(counters.k_update, estimator, counters.time_sim);
         end
         

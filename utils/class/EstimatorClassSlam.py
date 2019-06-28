@@ -193,11 +193,10 @@ class EstimatorClassSlam:
           n_L= (self.XX.shape[0] - 15) / 2
           H= np.zeros((1, 15 + int(2*n_L)))
           H[0,8]= 1
-          print(np.linalg.norm(self.XX[3:6]))
           R= params.R_yaw_fn( np.linalg.norm(self.XX[3:6]));
-          z= yawMeasurement(w,r_IMU2rearAxis)
-          L= self.PX*np.transpose(H) / (H*self.PX*np.transpose(H) + R)
-          innov= z - H*self.XX
+          z= self.yawMeasurement(w,params)
+          L= np.dot( np.dot( self.PX, np.transpose(H) ), np.linalg.inv(np.dot( np.dot( H, self.PX ), np.transpose(H) ) + R) )
+          innov= z - np.dot(H, self.XX)
           innov= pi_to_pi.pi_to_pi(innov)
           self.XX[8]= pi_to_pi.pi_to_pi(self.XX[8])
           self.XX= self.XX + L*innov
@@ -208,8 +207,8 @@ class EstimatorClassSlam:
           r= np.array([[-params.r_IMU2rearAxis],[0],[0]])
           v_o= self.XX[3:6]
           R_NB= R_NB_rot.R_NB_rot( self.XX[6], self.XX[7], self.XX[8])
-          v_a= v_o + R_NB * np.cross(w,r)
-          v_a= v_a / np.norm(v_a)
+          v_a= v_o + np.dot( R_NB, (np.cross(w,r.transpose())).transpose() )
+          v_a= v_a / np.linalg.norm(v_a)
           yaw= math.atan2(v_a[1],v_a[0]) 
           return yaw
       # ----------------------------------------------
@@ -247,7 +246,7 @@ class EstimatorClassSlam:
           # if we are fast enough --> use GPS velocity msmt
           if (np.linalg.norm(z[3:6]) > params.min_vel_gps and params.SWITCH_GPS_VEL_UPDATE==1): # sense velocity
              R= np.diag( R )
-             H= np.array([np.eye(6), np.zeros((6,9)), np.zeros(6,n_L*2)])
+             H = np.concatenate((np.eye(6), np.zeros((6,9)), np.zeros((6,int(n_L*2)))),axis=1)
              print('GPS velocity')
     
            # update only the position, no velocity
@@ -258,10 +257,9 @@ class EstimatorClassSlam:
              print('-------- no GPS velocity ---------')
 
           self.XX[8]= pi_to_pi.pi_to_pi( self.XX[8] )
-          print(np.shape(R))
           L= np.dot( np.dot(self.PX, np.transpose(H)), np.linalg.inv( np.dot( np.dot(H, self.PX), np.transpose(H) ) + R) )
-          innov= z - np.dot( H, self.XX )
-          self.XX= self.XX + np.dot(L, innov)
+          innov= z - (np.dot( H, self.XX )).transpose()
+          self.XX= self.XX + np.dot(L, innov.transpose())
           self.PX= self.PX - np.dot( np.dot(L, H), self.PX)
       # ----------------------------------------------
       # ----------------------------------------------

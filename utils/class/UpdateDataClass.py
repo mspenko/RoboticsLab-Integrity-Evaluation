@@ -42,7 +42,7 @@ class UpdateDataClass:
       # ----------------------------------------------
 
       def store(self, epoch, estimator, time):
-          self.XX[:,epoch]= estimator.XX[0:15]
+          self.XX[:,epoch]= (estimator.XX[0:15]).transpose()
           self.PX[:,epoch]= np.diag( estimator.PX[0:15,0:15] ) # store only variances
           self.time[epoch]= time
           self.num_associated_lms[epoch]= estimator.num_associated_lms

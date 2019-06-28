@@ -4,6 +4,7 @@ import math
 
 
 def  pi_to_pi(angle):
+
      if angle.shape[0] == 1:
         if (angle < -2*math.pi or angle > 2*math.pi):
            #warning('pi_to_pi() error: angle outside 2-PI bounds.')
@@ -16,9 +17,12 @@ def  pi_to_pi(angle):
 
 
      else:
+        
+     
          acc = 0
          tmp = []
          for i in angle:
+             print(i)
              if(i<-2*math.pi or i>2*math.pi):
                tmp.append(acc)     #i= find(angle<-2*pi | angle>2*pi) # replace with a check
              acc = acc+1
