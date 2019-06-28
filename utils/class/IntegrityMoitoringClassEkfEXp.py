@@ -2,7 +2,9 @@ import numpy as np
 import math
 from scipy.stats import norm
 from scipy.stats.distributions import chi2
-
+from scipy.optimize import fminbound
+from scipy.optimize import minimize
+from scipy.special import comb
 class IntegrityMonitoringCLassEkfExp:
       m= 3
       calculate_A_M_recursively = 0
@@ -216,16 +218,209 @@ class IntegrityMonitoringCLassEkfExp:
               self.compute_hypotheses(params)
               # initialization of p_hmi
               self.p_hmi= 0
-              if (obj.n_L_M - obj.n_max < 2): # need at least 5 msmts (3 landmarks) to monitor one landmark fault
-                 printf('Not enough redundancy: n_L_M = %d, n_max = %d\n', obj.n_L_M, obj.n_max)
-                 obj.p_hmi= 1;
+              if (self.n_L_M - self.n_max < 2): # need at least 5 msmts (3 landmarks) to monitor one landmark fault
+                 print('Not enough redundancy: n_L_M = #d, n_max = #d\n', self.n_L_M, self.n_max)
+                 self.p_hmi= 1;
             
-              else % if we don't have enough landmarks --> P(HMI)= 1   
-                   obj.P_H= ones(obj.n_H, 1) * inf; % initializing P_H vector
-                   for i= 0:obj.n_H
-                   % build extraction matrix
-                   if i == 0
-                      obj.compute_E_matrix(0, params.m_F);
-                   else
-                      obj.compute_E_matrix(obj.inds_H{i}, params.m_F);
+              else: # if we don't have enough landmarks --> P(HMI)= 1   
+                    self.P_H= np.ones(self.n_H, 1) * math.inf; # initializing P_H vector
+                    for i in range(self.n_H.shape[0]):
+                        # build extraction matrix
+                        if (i == 0):
+                           self.compute_E_matrix(0, params.m_F);
+                        else:
+                           self.compute_E_matrix(self.inds_H[i], params.m_F);
+                        # Worst-case fault direction
+                        f_M_dir= np.dot(np.dot(np.dot(np.dot(np.transpose(self.E),np.inv(self.E * self.M_M * np.transpose(self.E))),self.E), np.transpose(self.A_M)), alpha);
+                        f_M_dir= np.dot(f_M_dir,np.inv(np.linalg.norm(f_M_dir))); # normalize
+                
+                        # worst-case fault magnitude
+                        fx_hat_dir= np.dot(np.dot(np.transpose(alpha),self.A_M),f_M_dir);
+                        M_dir= np.dot(np.dot(np.transpose(f_M_dir),self.M_M),f_M_dir);
+                
+                        # worst-case fault magnitude
+                        f_mag_min= 0;
+                        f_mag_max= 5;
+                        f_mag_inc= 5;
+                        p_hmi_H_prev= -1;
+                        for k in range(11):
+                            args = np.c_[f_M_mag, fx_hat_dir, M_dir, self.sigma_hat, params.alert_limit, np.dot(params.m_F,self.n_L_M)]
+                            bound = np.c_[f_mag_min, f_mag_max]
+                            [f_M_mag_out, p_hmi_H]= minimize(self.optimization_fn,args,bound);
+                            # make it a positive number
+                            p_hmi_H= -p_hmi_H;
+                    
+                            # check if the new P(HMI|H) is smaller
+                            if (k == 1 or p_hmi_H_prev < p_hmi_H):
+                               p_hmi_H_prev= p_hmi_H;
+                               f_mag_min= f_mag_min + f_mag_inc;
+                               f_mag_max= f_mag_max + f_mag_inc;
+                            else:
+                               p_hmi_H= p_hmi_H_prev;
+
+                        # Add P(HMI | H) to the integrity risk
+                        if (i == 0):
+                           self.P_H_0= prod( 1 - self.P_F_M );
+                           self.p_hmi= self.p_hmi + np.dot(p_hmi_H,self.P_H_0);
+                        else:
+                           # unfaulted_inds= all( 1:self.n_L_M ~= fault_inds(i,:)', 1 );
+                           self.P_H[i]= np.prod( self.P_F_M( self.inds_H[i] ) ); #...
+                           # * prod( 1 - P_F_M(unfaulted_inds)  );
+                           self.p_hmi= self.p_hmi + p_hmi_H * self.P_H(i)
+              # store integrity related data
+              data.store_integrity_data(self, estimator, counters, params)
+          #hey
+          elif (counters.k_im > 1): # if it's the first time --> cannot compute Lpp_k 
+               if (estimator.n_k == 0):
+                 self.Lpp_k= self.Phi_ph[0];
+               else:
+                 self.Lpp_k= self.Phi_ph[0] - np.dot(np.dot(self.L_k,self.H_k),self.Phi_ph[0]);
+    
+               if (params.SWITCH_FIXED_LM_SIZE_PH == 1):
+                  self.M = self.M + 1;
+                  if (self.is_extra_epoch_needed == 1):
+                     self.is_extra_epoch_needed= 0;
+          else: # first time we get lidar msmts
+               self.Lpp_k= 0;
+               if (params.SWITCH_FIXED_LM_SIZE_PH==1):
+                  if (self.is_extra_epoch_needed == 1):
+                     self.is_extra_epoch_needed= 0;
+       
+
+          # store time
+          data.im.time[counters.k_im]= counters.time_sim;
+
+          # update the preceding horizon 
+          update_preceding_horizon(self, estimator, params) 
+      #--------------------------------------------------------------------------
+      #--------------------------------------------------------------------------
+      def compute_A_M_matrix(selfestimator):
+          # build matrix A_M in the first time
+          if (isempty(self.A_M) or self.calculate_A_M_recursively==0): 
+              # allocate L_k and initialize
+              self.A_M= np.zeros((self.m, self.n_M + self.m));
+              self.A_M[:,1:estimator.n_k]= self.L_k;
+    
+              for i in range(self.M.shape[0]):
+                  if (i == 1):
+                     Dummy_Variable= self.Lpp_k;
+                  else:
+                     Dummy_Variable= np.dot(Dummy_Variable,self.Lpp_ph[i-1]);
+                  # if no landmarks in the FoV at some time in the preceding horizon
+                  if (self.n_ph(i) > 0):
+                     n_start= estimator.n_k + np.sum( self.n_ph[1:i] ) + 1;
+                     n_end=   estimator.n_k + np.sum( self.n_ph[1:i+1] );
+                     self.A_M[:,n_start : n_end]= Dummy_Variable * self.L_ph[i];
+    
+              # last entry with only PSIs
+              self.A_M[:, self.n_M+1 : self.n_M + self.m] = np.dot(Dummy_Variable,self.Lpp_ph[self.M]);
+          # calculate matrix A_M recusively
+          else:   
+             self.A_M=np.array([self.L_k, self.Lpp_k*self.A_M]);
+             self.A_M[:, self.n_M +1 : end-self.m] = None;
+             self.A_M[:, self.A_M[self.A_M.shape[0]]-self.m+1 : self.A_M[self.A_M.shape[0]]] = np.dot(self.A_M[:, self.A_M[self.A_M.shape[0]]-self.m+1 : self.A_M[self.A_M.shape[0]]],np.inv(self.Lpp_ph[self.M +1]));
+      #--------------------------------------------------------------------------
+      #--------------------------------------------------------------------------
+      def compute_B_bar_matrix(self, estimator):
+          # Augmented B
+          self.B_bar= math.inf*np.ones( self.n_M , self.n_M + self.m );
+          A_prev= np.dot(np.inv(self.Lpp_k),self.A_M[ : , estimator.n_k + 1:self.A_M[self.A_M.shape[0]] ]);
+          B_ind_row_start= estimator.n_k + 1;
+          B_ind_col_end= estimator.n_k;
+
+          # accounting for the case where there are no landmarks in the FoV at epoch k
+          if (estimator.n_k > 0):
+             self.B_bar[1:estimator.n_k , :]=np.concatenate(( eye(estimator.n_k), np.dot(np.dot(-self.H_k,self.Phi_ph[1]), A_prev) ),axis = 1);
+
+          # Recursive computation of B
+          for i in range(self.M,shape[0]):
+              A_prev= np.dot(inv(self.Lpp_ph[i]),A_prev[:, self.n_ph(i)+1:end]);
+          # accounting for the case where there are no landmarks in the FoV at
+          # one of the epochs in the preceding horizon
+          if (self.n_ph[i] > 0):
+             B= np.concatenate((np.eye( self.n_ph[i] ) , np.dot(np.dot(-self.H_ph[i],self.Phi_ph[i+1]),A_prev)),axis = 1);
+             B_ind_row_end= B_ind_row_start + self.n_ph(i) - 1;
+             self.B_bar[B_ind_row_start:B_ind_row_end, 1:B_ind_col_end]= 0;
+             self.B_bar[B_ind_row_start:B_ind_row_end, B_ind_col_end+1:end]= B;
+
+             # increase row index for next element B
+             B_ind_row_start= B_ind_row_start + self.n_ph[i];
+             B_ind_col_end= B_ind_col_end + self.n_ph[i];
+      #--------------------------------------------------------------------------
+      #--------------------------------------------------------------------------
+      def compute_hypotheses(self, params):
+          # probability of "r" or more simultaneous faults
+          flag_out= 0;
+          for r in range(self.P_F_M.shape[0]):
+              if  (np.sum(self.P_F_M)**r or factorial[r]  < params.I_H):
+                  self.n_max= r-1;
+                  flag_out= 1;
+                  break
+
+          # if no "r" holds --> all landmarks failing simultaneously must be monitored
+          if (flag_out==0): 
+             self.n_max= r
+
+          if (self.n_max > 1):
+              printf('n_max: #d\n', self.n_max);
+              if (params.SWITCH_ONLY_ONE_LM_FAULT ==1):
+                  self.n_max= 1;
+
+          # compute number of hypotheses
+          self.n_H= 0;
+          self.inds_H= [None]*200
+          start_ind= 1;
+          for num_faults in range(self.n_max):
+              if (params.SWITCH_FACTOR_GRAPHS and (params.SWITCH_SIM==0)):
+                  new_H= comb(self.n_L_M + (self.n_M_gps/6), num_faults);
+                  self.n_H= self.n_H + new_H;
+                  self.inds_H[ start_ind:start_ind+new_H - 1, 1]=np.array([ comb( self.n_L_M + (self.n_M_gps/6), num_faults)]).reshape(2,( self.n_L_M + (self.n_M_gps/6)).shape[0],num_faults.shape[0]);
+                  start_ind= start_ind + new_H;
+              else:
+                  new_H= comb(self.n_L_M, num_faults);
+                  self.n_H= self.n_H + new_H;
+                  self.inds_H[ start_ind:start_ind+new_H - 1, 1 ]=...
+                  np.array([ comb(self.n_L_M, num_faults)]) .reshape(2,self.n_L_M.shape[0],num_faults.shape[0])
+                  start_ind= start_ind + new_H;
+          self.inds_H[start_ind:self.inds_H[self.inds_H.shape[0]]]= None;
+
+      #--------------------------------------------------------------------------
+      #--------------------------------------------------------------------------
+      def compute_Y_M_matrix(self, estimator):
+          # if it's the first epoch --> build the Y_M
+          if isempty(self.Y_M):
+             self.Y_M= np.zeros( (self.n_M, self.n_M) );
+             self.Y_M[ 1:estimator.n_k, 1:estimator.n_k ]= estimator.Y_k;
+             for i in range(self.M):
+                 n_start= estimator.n_k + np.sum( self.n_ph[1:i-1] ) + 1;
+                 n_end  = estimator.n_k + np.sum( self.n_ph[1:i] );
+                 self.Y_M[ n_start: self.Y_M[self.Y_M.shape[0]] , n_start:self.Y_M[self.Y_M.shape[0]] ]= self.Y_ph[i];
+          else: # update Y_M
+            self.Y_M=np.concatenate((np.concatenate((estimator.Y_k, np.zeros((estimator.n_k,np.sum(self.n_ph[1:self.M])))),axis = 1),np.concatenate((np.zeros((np.sum(self.n_ph[1:self.M]),estimator.n_k)), self.Y_M[1:np.sum(self.n_ph[1:self.M]), 1:np.sum(self.n_ph[1:self.M])]),axis =1)),axis = 0)
+      #--------------------------------------------------------------------------
+      #--------------------------------------------------------------------------
+      def update_preceding_horizon(self, estimator, params):
+            
+            # TODO: organize 
+                if (params.SWITCH_FIXED_LM_SIZE_PH == 1):
+                    self.n_ph=     np.concatenate((estimator.n_k,self.n_ph[1:self.M]),axis = 0);
+                    self.gamma_ph= np.concatenate((estimator.gamma_k,self.gamma_ph[1:self.M]),axis = 0);
+                    self.q_ph=     np.concatenate((estimator.q_k,self.q_ph[1:self.M]),axis = 0);
+                    self.Phi_ph=   np.concatenate((self.Phi_k, self.Phi_ph[1:self.M+ 1]),axis = 1); ######## CAREFUL
+                    self.H_ph=     np.concatenate((self.H_k,self.H_ph[1:self.M]),axis = 1);
+                    self.L_ph=     np.concatenate((self.L_k,self.L_ph[1:self.M]),axis = 1);
+                    self.Lpp_ph=   np.concatenate((self.Lpp_k,self.Lpp_ph[1:self.M]),axis = 1);
+                    self.Y_ph=     np.concatenate((estimator.Y_k,self.Y_ph[1:self.M]),axis = 1);
+                    self.P_MA_ph=  np.concatenate((self.P_MA_k,self.P_MA_ph[1:self.M]),axis = 1);
+
+                else:
+                    self.n_ph=     np.concatenate((estimator.n_k,self.n_ph[1:self.n_ph[self.n_ph.shape[0]]-1]),axis = 0);
+                    self.gamma_ph= np.concatenate((estimator.gamma_k, self.gamma_ph[1:self.gamma_ph[self.gamma_ph.shape[0]]-1]),axis = 1);
+                    self.q_ph=     np.concatenate((estimator.q_k,self.q_ph[1:self.q_ph[self.q_ph.shape[0]]]-1),axis = 0);
+                    self.Phi_ph=   np.concatenate((self.Phi_k,self.Phi_ph[1:self.Phi_ph[self.Phi_ph.shape[0]]-1]),axis = 0); ######## CAREFUL
+                    self.H_ph=     np.concatenate((self.H_k,self.H_ph[1:self.H_ph[self.H_ph.shape[0]]-1]),axis = 0);
+                    self.L_ph=     np.concatenate((self.L_k,self.L_ph[1:self.L_ph[self.L_ph.shape[0]]-1]),axis = 0);
+                    self.Lpp_ph=   np.concatenate((self.Lpp_k,self.Lpp_ph[1:self.Lpp_ph[self.Lpp_ph.shape[0]]-1]),axis  = 0);
+                    self.Y_ph=     np.concatenate((estimator.Y_k,self.Y_ph[1:self.Y_ph[self.Y_ph.shape[0]]-1]),axis =0);
+                    self.P_MA_ph=  np.concatenate((self.P_MA_k,self.P_MA_ph[1:self.P_MA_p[self.P_MA_p.shape[0]]-1]),axis = 0);
 
