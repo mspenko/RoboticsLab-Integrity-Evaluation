@@ -141,3 +141,7 @@ for epoch in range(imu.num_readings-1):
         else:
            counters.k_lidar = counters.k_lidar -1 ;
            LIDAR_Index_exceeded = 1;
+
+data_obj.store_update(counters.k_update, estimator, counters.time_sim)
+#data_obj.delete_extra_allocated_memory(counters)
+data_obj.plot_map_slam(estimator, gps, imu.num_readings, params)

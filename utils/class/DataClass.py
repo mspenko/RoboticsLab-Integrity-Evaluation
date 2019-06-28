@@ -1,6 +1,9 @@
 import PredictionClass
 import UpdateDataClass
 import IntegrityDataClass
+import matplotlib as mpl
+from mpl_toolkits import mplot3d
+import matplotlib.pylab as plt
 class DataClass:
 
       pred = None
@@ -100,7 +103,18 @@ class DataClass:
 
           return HMI_inds
                 
-            
+      def plot_map_slam(self, estimator, gps, num_readings, params):
+      # Plot GPS+IMU estimated path
+
+          fig = plt.figure()
+          ax = fig.add_subplot(111, projection='3d')
+
+          ax.scatter((self.pred.XX[0,:]), (self.pred.XX[1,:]), (self.pred.XX[2,:]), c='r', marker='o')
+          ax.set_xlabel('X Label')
+          ax.set_ylabel('Y Label')
+          ax.set_zlabel('Z Label')
+
+          plt.show()
       '''      
         # ----------------------------------------------
         # ----------------------------------------------
