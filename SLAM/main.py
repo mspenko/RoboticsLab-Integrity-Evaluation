@@ -31,7 +31,6 @@ estimator.linearize_discretize( imu.msmt[:,0], params.dt_imu, params );
 # ----------------------------------------------------------
 # -------------------------- LOOP --------------------------
 for epoch in range(imu.num_readings-1):
-    input(estimator.XX)
     print('Epoch -> ',epoch)
     # set the simulation time to the IMU time
     counters.time_sim= imu.time[epoch];

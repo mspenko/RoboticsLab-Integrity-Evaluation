@@ -87,8 +87,8 @@ class EstimatorClassSlam:
       # ----------------------------------------------
       # ----------------------------------------------                    
       def compute_alpha(self,params):
-          self.alpha= np.array([[-sin( self.XX(params.ind_yaw) )]
-                      [cos( self.XX(params.ind_yaw) )]
+          self.alpha= np.array([[-math.sin( self.XX(params.ind_yaw) )]
+                      [math.cos( self.XX(params.ind_yaw) )]
                        [0] ])
       # ----------------------------------------------
       # ----------------------------------------------  
@@ -107,7 +107,6 @@ class EstimatorClassSlam:
           # phi=   -atan2( g_bar(2) , abs(g_bar(3)) )
       # ----------------------------------------------
       # ----------------------------------------------  
-      # This is the old version (Yihe, please update it)
       def linearize_discretize(self,u, dT, params):
           
           if (params.SWITCH_CALIBRATION==1):
