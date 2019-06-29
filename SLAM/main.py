@@ -11,6 +11,7 @@ import GPSClass
 import LidarClass
 import IMUClass
 import DataClass
+import body2nav_3D
 
 # create objects
 params= ParametersClass.ParametersClass('slam');
@@ -30,6 +31,7 @@ estimator.linearize_discretize( imu.msmt[:,0], params.dt_imu, params );
 # ----------------------------------------------------------
 # -------------------------- LOOP --------------------------
 for epoch in range(imu.num_readings-1):
+    input(estimator.XX)
     print('Epoch -> ',epoch)
     # set the simulation time to the IMU time
     counters.time_sim= imu.time[epoch];
@@ -113,29 +115,34 @@ for epoch in range(imu.num_readings-1):
             lidar.remove_features_in_areas(estimator.XX[0:9]);
             
             # NN data association
-            association= estimator.nearest_neighbor(lidar.msmt[:,0:2], params);
+            if not(len(lidar.msmt) == 0):
+              association= estimator.nearest_neighbor(lidar.msmt[:,0:2], params);
             
             # Lidar update
-            estimator.lidar_update(lidar.msmt[:,0:2], association, params);
+            if not(len(lidar.msmt) == 0):
+              estimator.lidar_update(lidar.msmt[:,0:2], association, params);
 
             # Increase landmark covariance to the minimum
             estimator.increase_landmarks_cov(params.R_minLM);
             
             # Add new landmarks
-            estimator.addNewLM( lidar.msmt[np.transpose(associastion) == -1,:], params.R_lidar );
+            if not(len(lidar.msmt) == 0):
+              if (not not(lidar.msmt[np.transpose(association) == -1,:])):
+                 estimator.addNewLM( lidar.msmt[np.transpose(association) == -1,:], params.R_lidar )
             
             # Lineariza and discretize
             estimator.linearize_discretize( imu.msmt[:,epoch], params.dt_imu, params);
             
             # Store data
-            data_obj.store_msmts( body2nav_3D(lidar.msmt, estimator.XX[0:9]) );# Add current msmts in Nav-frame
+            if not(len(lidar.msmt) == 0):
+              data_obj.store_msmts( body2nav_3D.body2nav_3D(lidar.msmt, estimator.XX[0:9]) );# Add current msmts in Nav-frame
             counters.k_update= data_obj.store_update(counters.k_update, estimator, counters.time_sim);
         
         # Increase counters
         counters.increase_lidar_counter();
         
         # -----Osama----- TODO: osama, what is this again?
-        if (counters.k_lidar <= lidar.time.shape[0]):
+        if (counters.k_lidar < lidar.time.shape[0]):
             counters.time_lidar= lidar.time[counters.k_lidar,1];
         else:
            counters.k_lidar = counters.k_lidar -1 ;

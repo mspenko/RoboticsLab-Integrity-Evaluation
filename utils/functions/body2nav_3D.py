@@ -7,6 +7,6 @@ def body2nav_3D(z,x):
     z= np.transpose( np.dot(R_NB,np.transpose(z)) + x[0:3] );
 
     # Put the back into 2D
-    z= z[:,1:2];
+    z= z[:,0:2];
 
     return z

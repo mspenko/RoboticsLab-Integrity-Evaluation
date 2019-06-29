@@ -263,23 +263,31 @@ class EstimatorClassSlam:
           self.PX= self.PX - np.dot( np.dot(L, H), self.PX)
       # ----------------------------------------------
       # ----------------------------------------------
-      def lidarUpdate(self,z,association,params):
+      def lidar_update(self,z,association,params):
 
           
           R= params.R_lidar;
           self.XX[8]= pi_to_pi.pi_to_pi( self.XX[8] );
 
-          if all(association == -1):
+          if np.all(association == -1):
              return 0
 
           # Eliminate the non-associated features
           ind_to_eliminate= association == -1 or association == 0;
-          print(ind_to_eliminate)
-          acc = 0
-          for i in ind_to_eliminate:
-              if (i == 1):
-                 z = np.delete(z,acc,axis = 0)
-              acc = acc+1
+
+          tmp_list = []
+          check= np.shape(ind_to_eliminate)
+          notScalar= len(check)
+          if (notScalar == 0):
+            if (ind_to_eliminate == 1):
+               z=[]
+               return 0
+          else:
+            for i in range(ind_to_eliminate.shape[0]):
+                if (ind_to_eliminate[i] == 1):
+                   tmp_list.append(i)
+            z = np.delete(z,tmp_list,axis = 0)
+
           #z= np.delete(z,(ind_to_eliminate,:))
           association = np.delete(association,(ind_to_eliminate))
 
@@ -425,51 +433,51 @@ class EstimatorClassSlam:
       # ----------------------------------------------
       def nearest_neighbor(obj, z, params):
 
-          n_F= z.shape[1];
+          n_F= z.shape[0];
           n_L= (obj.XX.shape[0] - 15) / 2;
-
-          association= np.ones(1,n_F) * (-1);
+          association= np.ones((1,n_F)) * (-1);
 
           if (n_F == 0 or n_L == 0):
              return 0
  
-          spsi= math.sin(obj.XX[9]);
-          cpsi= math.cos(obj.XX[9]);
+          spsi= math.sin(obj.XX[8]);
+          cpsi= math.cos(obj.XX[8]);
           zHat= np.zeros((2,1));
           # Loop over extracted features
-          for i in range(n_F):
+          print(association)
+          for i in range(1,n_F+1):
               minY= params.threshold_new_landmark;
     
-              for l in range(n_L):
-                  ind= (15 + (2*l-1)):(15 + 2*l);
+              for l in range(1,n_L+1):
+                  ind= np.array[(15 + (2*l-1) - 1):(15 + 2*l)]
         
                   dx= obj.XX[ind[0]] - obj.XX[0];
                   dy= obj.XX[ind[1]] - obj.XX[1];
         
-                  zHat(1)=  dx*cpsi + dy*spsi;
-                  zHat(2)= -dx*spsi + dy*cpsi;
+                  zHat[0]=  dx*cpsi + dy*spsi;
+                  zHat[1]= -dx*spsi + dy*cpsi;
                   gamma= np.transpose(z[i,:]) - zHat;
         
                   H= np.array([[-cpsi, -spsi, -dx*spsi + dy*cpsi,  cpsi, spsi],
                       [spsi, -cpsi, -dx*cpsi - dy*spsi, -spsi, cpsi]]);
         
-                  Y= np.dot(np.dot(H,obj.PX(0:1,8,ind],[0:1,8,ind])),np.transpose(H)) + params.R_lidar;
+                  Y= np.dot(np.dot(H,obj.PX[[0,1,8,ind],[0,1,8,ind]]),np.transpose(H)) + params.R_lidar;
         
                   y2= np.dot(np.dot(np.transpose(gamma),inv(Y)),gamma);
         
                   if (y2 < minY):
                       minY= y2;
-                      association[i]= l;
+                      association[i-1]= l;
 
               # If the minimum value is very large --> new landmark
               if (minY > params.T_NN and minY < params.threshold_new_landmark):
-                  association[i]= 0;
+                  association[i-1]= 0;
 
 
           # Increase appearances counter
-          for i in range(n_F):
-              if (association[i] != -1 and association[i] != 0):
-                  obj.appearances[association[i]]= obj.appearances[association[i]] + 1;
+          for i in range(1,n_F+1):
+              if (association[i-1] != -1 and association[i-1] != 0):
+                  obj.appearances[association[i-1]-1]= obj.appearances[association[i-1]-1] + 1;
           return association
  # ----------------------------------------------
  # ----------------------------------------------  

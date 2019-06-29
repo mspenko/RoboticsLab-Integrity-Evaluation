@@ -61,24 +61,39 @@ class LidarClass():
             # load the mat file with the extrated features at the lidar epoch specified
             fileName = params.file_name_lidar_path+'textFiles/Epoch'+str(int(epoch))+'.txt'
             # loads the z variable with range and bearing
-            self.msmt= np.loadtxt(fileName) 
+            self.msmt= np.loadtxt(fileName)
+            if not (type(self.msmt[0]) is np.ndarray ):
+               self.msmt= np.array([self.msmt])
             # if there are features --> prepare the measurement
             if (self.msmt.shape[0] !=0):
                 if (params.SWITCH_REMOVE_FAR_FEATURES==1):
                     self.remove_far_features(params.lidarRange)
+                    if (len(self.msmt)==0):
+                      return 0
                 # Add height
-                #self.msmt= np.array([self.msmt, np.ones((self.msmt.shape[1],1)) * params.feature_height]) 
+                #self.msmt= np.array([self.msmt, np.ones((self.msmt.shape[1],1)) * params.feature_height])
                 self.msmt = np.concatenate((self.msmt,np.dot(np.ones((self.msmt.shape[0],1)), params.feature_height)),axis = 1)
       # ----------------------------------------------
       # ----------------------------------------------
       def remove_far_features(self,lidarRange):
           # removes extracted features farther than "lidarRange"
-          d= self.msmt[:][0]**2 + self.msmt[:][1]**2 
-          acc = 0
-          for i in d:
-              if(i>lidarRange**2):
-                self.msmt =np.delete(self.msmt,acc,axis = 0)
-              acc = acc+1
+          if (self.msmt).shape[0] == 1:
+            d= self.msmt[0,0]**2 + self.msmt[0,1]**2 
+          else:
+            d= self.msmt[:][0]**2 + self.msmt[:][1]**2 
+          
+          check= np.shape(d)
+          notScalar= len(check)
+          if (notScalar == 0):
+            if(d>lidarRange**2):
+              self.msmt=[]
+              return 0
+          else:
+            tmp_list = []
+            for i in range(len(d)):
+                if(d[i]>lidarRange**2):
+                  tmp_list.append(i)
+            self.msmt =np.delete(self.msmt,tmp_list,axis = 0)
           #self.msmt[ d > lidarRange**2][:]= [] 
       # ----------------------------------------------
       # ----------------------------------------------
@@ -86,30 +101,35 @@ class LidarClass():
             # remove features from areas, each area is: [minX, maxX, minY, maxY]
             # Remove people-features for the data set 
             i = 0
+            if (len(self.msmt) == 0):
+              return 0
             while( i< self.areas_to_remove.shape[0]):
                 area= self.areas_to_remove[i,:] 
-                
                 # transform to nav-frame first
                 msmt_nav_frame= body2nav_3D.body2nav_3D(self.msmt,x)
                 
                 # Remove people-features
                 #inX= (msmt_nav_frame(:,0) > area(0)) & (msmt_nav_frame(:,0) < area(1)) 
                 inX = []
-                for i in msmt_nav_frame:
-                    if(i>area[0] and i<area[1]):
-                      inX.append(i)
+                for j in msmt_nav_frame[:,0]:
+                    if(j>area[0] and j<area[1]):
+                      inX.append(1)
+                    else:
+                      inX.append(0)
 
                 #inY= (msmt_nav_frame(:,1) > area(2)) & (msmt_nav_frame(:,1) < area(3))
                 inY = []
-                for i in msmt_nav_frame:
-                    if(i>area[2] and i<area[3]):
-                      inY.append(i)
+                for j in msmt_nav_frame[:,1]:
+                    if(j>area[2] and j<area[3]):
+                      inY.append(1)
+                    else:
+                      inY.append(0)
+
                 inX,inY = np.array(inX),np.array(inY)
 
                 tmp_list = []
-                for i in inX:
-                    if (inX[i] == inY[i]):          #self.msmt( inX & inY, :)= [] 
-                       tmp_list.append(1)
-                      
-                self.msmt = np.array(tmp_list)
+                for j in range(len(inX)):
+                    if (inX[j] ==1 and inX[j] == inY[j]):          #self.msmt( inX & inY, :)= [] 
+                       tmp_list.append(j)
+                self.msmt = np.delete(self.msmt,tmp_list,axis = 0)      
                 i = i+1 

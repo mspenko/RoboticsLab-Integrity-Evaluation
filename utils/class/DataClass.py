@@ -1,6 +1,7 @@
 import PredictionClass
 import UpdateDataClass
 import IntegrityDataClass
+import numpy as np
 import matplotlib as mpl
 from mpl_toolkits import mplot3d
 import matplotlib.pylab as plt
@@ -60,7 +61,10 @@ class DataClass:
       # ----------------------------------------------
       def store_msmts(self, msmts): # TODO: optimize this mess!!
           self.num_extracted_features= np.array([[self.num_extracted_features],[msmts.shape[1]]])
-          self.msmts= np.array([[self.msmts],[msmts]])
+          if(self.msmts is None ):
+             self.msmts = msmts
+          else:   
+             self.msmts= np.concatenate((self.msmts,msmts),axis = 0)
         
       # ----------------------------------------------
       # ----------------------------------------------
