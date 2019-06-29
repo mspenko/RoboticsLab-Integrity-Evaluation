@@ -153,21 +153,19 @@ class EstimatorClassFgExpOff:
 
           # build Jacobian
           self.H_k_lidar= np.zeros( (self.n_k , params.m) );
-          for i in range(1:self.n_L_k):
+          for i in range(1,self.n_L_k):
               # Indexes
-              indz= 2*i + [-1:0];
+              indz= 2*i + np.array([-1,0]);
               dx= self.landmark_map[self.lm_ind_fov[i], 1] - self.XX[0];
               dy= self.landmark_map[self.lm_ind_fov[i], 2] - self.XX[1];
     
               # Jacobian -- H
               self.H_k_lidar[indz,0]= np.array([[-cpsi], [spsi]]);
               self.H_k_lidar[indz,1]= np.array([[-spsi], [-cpsi]]);
-              self.H_k_lidar[indz,params.ind_yaw]= [-dx * spsi + dy * cpsi;
-                                   -dx * cpsi - dy * spsi];
-                          
+              self.H_k_lidar[indz,params.ind_yaw]= np.concatenate((np.dot(-dx,spsi) + np.dot(dy,cpsi),np.dot(-dx,cpsi) - np.dot(dy,spsi)),axis = 1)               
 
               # compute the whiten jacobian matrix for lidar msmts
-              self.H_k_lidar= kron( eye( self.n_L_k ) , params.sqrt_inv_R_lidar ) * self.H_k_lidar;
+              self.H_k_lidar= np.kron( np.eye( self.n_L_k ) , params.sqrt_inv_R_lidar ) * self.H_k_lidar;
 
       # ----------------------------------------------
       # ---------------------------------------------- 
