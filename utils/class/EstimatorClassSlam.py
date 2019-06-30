@@ -92,6 +92,40 @@ class EstimatorClassSlam:
                        [0] ])
       # ----------------------------------------------
       # ----------------------------------------------  
+      def compute_lidar_H_k(self, params, FG, epoch): 
+          # this funcion builds the Jacobian H of LMs msmts for the factor graphs...
+          # case without actual mesaurements.
+
+          spsi= math.sin(self.XX[9]);
+          cpsi= math.cos(self.XX[9]);
+
+          # landmarks in the field of view (saved from the online run)
+          self.lm_ind_fov= FG.associations[epoch];
+
+          # number of extracted landmarks (more specifically features)
+          self.n_L_k= FG.associations[epoch].shape[0];
+
+          # number of expected measurements
+          self.n_k = np.dot(self.n_L_k,params.m_F);
+
+          # build Jacobian
+          self.H_k_lidar= np.zeros( (self.n_k , params.m) );
+          for i in range(1,self.n_L_k):
+              # Indexes
+              indz= 2*i + np.array([-1,0]);
+              dx= self.landmark_map[self.lm_ind_fov[i], 1] - self.XX[0];
+              dy= self.landmark_map[self.lm_ind_fov[i], 2] - self.XX[1];
+    
+              # Jacobian -- H
+              self.H_k_lidar[indz,0]= np.array([[-cpsi], [spsi]]);
+              self.H_k_lidar[indz,1]= np.array([[-spsi], [-cpsi]]);
+              self.H_k_lidar[indz,params.ind_yaw]= np.concatenate((np.dot(-dx,spsi) + np.dot(dy,cpsi),np.dot(-dx,cpsi) - np.dot(dy,spsi)),axis = 1)               
+
+              # compute the whiten jacobian matrix for lidar msmts
+              self.H_k_lidar= np.kron( np.eye( self.n_L_k ) , params.sqrt_inv_R_lidar ) * self.H_k_lidar;
+
+      # ----------------------------------------------
+      # ----------------------------------------------  
       def initialize_pitch_and_roll(self, imu_calibration_msmts):
           # calculates the initial pitch and roll
           # compute gravity from static IMU measurements
