@@ -76,7 +76,7 @@ class EstimatorClassSlam:
           # Initial attitude
           self.initialize_pitch_and_roll(imu_calibration_msmts)
           # initialize the yaw angle
-          self.XX[params.ind_yaw]= np.deg2rad(params.initial_yaw_angle)
+          self.XX[params.ind_yaw-1]= np.deg2rad(params.initial_yaw_angle)
 
           # save initial attitude for calibration
           self.initial_attitude= self.XX[6:9]
@@ -95,11 +95,9 @@ class EstimatorClassSlam:
       def initialize_pitch_and_roll(self, imu_calibration_msmts):
           # calculates the initial pitch and roll
           # compute gravity from static IMU measurements
-          #g_bar= np.mean( imu_calibration_msmts,1 )
-          g_bar= imu_calibration_msmts
+          g_bar= np.mean( imu_calibration_msmts,1 )
           # Books method
           g_bar= -g_bar
-          
           self.XX[6]= math.atan2( g_bar[1],g_bar[2] )
           self.XX[7]= math.atan2( -g_bar[0], np.sqrt( g_bar[1]**2 + g_bar[2]**2 ) )
           # My method -- works for z-axis pointing down (accz < 0)
@@ -119,7 +117,7 @@ class EstimatorClassSlam:
              S= params.S;
 
           # Compute the F and G matrices (linear continuous time)
-          [F,G]=FG_fn.FG_fn(u[0],u[1],u[2],u[4],u[5],self.XX[6],self.XX[7],self.XX[8],self.XX[9],self.XX[10],self.XX[11],self.XX[13],self.XX[14],taua,tauw)
+          [F,G]= FG_fn.FG_fn(u[0],u[1],u[2],u[4],u[5],self.XX[6] ,self.XX[7],self.XX[8],self.XX[9],self.XX[10],self.XX[11],self.XX[13],self.XX[14],taua,tauw)
 
           # Discretize system for IMU time (only for variance calculations)
           self.discretize(F, G, S, dT);
@@ -182,7 +180,7 @@ class EstimatorClassSlam:
           b_f_dot= np.dot( -np.eye(3) / taua, b_f.transpose())
           b_w_dot= np.dot( -np.eye(3) / tauw, b_w.transpose())
           x_dot= np.concatenate((r_dot,v_dot,E_dot,b_f_dot,b_w_dot),axis=0)
-          # udpate estimate
+          # update estimate
           self.XX[0:15]= self.XX[0:15] + params.dt_imu * x_dot
           self.PX[0:15,0:15]= np.dot( np.dot(self.Phi_k, self.PX[0:15,0:15]), np.transpose(self.Phi_k) ) + self.D_bar
       # ----------------------------------------------
@@ -254,7 +252,6 @@ class EstimatorClassSlam:
              R= np.diag( R[0:3] )
              H= np.concatenate((np.concatenate((np.eye(3), np.zeros((3,12))),axis = 1), np.zeros((3,int(n_L*2)))),axis = 1)
              print('-------- no GPS velocity ---------')
-
           self.XX[8]= pi_to_pi.pi_to_pi( self.XX[8] )
           L= np.dot( np.dot(self.PX, np.transpose(H)), np.linalg.inv( np.dot( np.dot(H, self.PX), np.transpose(H) ) + R) )
           innov= z - (np.dot( H, self.XX )).transpose()
@@ -416,18 +413,20 @@ class EstimatorClassSlam:
           # sysc= ss(F, zeros(15,1), zeros(1,15), 0)
           # sysd= c2d(sysc, dT)
           # Phi= sysd.A
-
+          print(np.shape(-F))
+          print(np.shape(G))
+          print(np.shape(S))
+          print(np.shape(np.dot(G,np.dot(S,np.transpose(G)))))
           # Methdo to obtain covariance matrix for dicrete system
-          C= np.transpose(np.concatenate((np.concatenate((-F, np.dot(G,np.dot(S,np.transpose(G)))),axis = 0),np.concatenate((np.zeros([15,15]), np.transpose(F)),axis = 0)),axis = 1))
+          C= np.concatenate((np.concatenate((-F, np.dot(G,np.dot(S,np.transpose(G)))),axis = 1),np.concatenate((np.zeros([15,15]), np.transpose(F)),axis = 1)),axis = 0)
 
           # Proper method
           EXP= expm(C*dT)
           self.Phi_k= np.transpose(EXP[15:,15:])
-          self.D_bar= self.Phi_k * EXP[0:15,15:]
+          #self.D_bar= self.Phi_k * EXP[0:15,15:]
 
           # Simplified method
           self.D_bar= np.dot( np.dot( (G*dT) , (S/dT) ) , np.transpose((G*dT)) ) # simplified version
-
       # ----------------------------------------------
       # ----------------------------------------------
       def nearest_neighbor(obj, z, params):

@@ -28,7 +28,6 @@ class GPSClass:
           data = data['data']
           self.num_readings= data.shape[0]
           self.time = data[:,3]
-         # print(self.time)
           posX=     data[:,4]
           posY=     data[:,5]
           posZ=     data[:,6]
@@ -43,7 +42,7 @@ class GPSClass:
           sigVelZ=  data[:,15]
 
           # Save the initial time as reference for other sensors
-          self.timeInit= self.time[1]
+          self.timeInit= self.time[0]
             
           # Make time start at zero
           self.time= self.time - self.time[0]
@@ -71,7 +70,7 @@ class GPSClass:
           self.msmt= np.dot(R_NE_block,np.transpose(self.msmt))
             
           for i in range((self.time).shape[0]):
-              self.R[i,:]= np.diag( R_NE_block * np.diag( self.R[i,:] ) * np.transpose(R_NE_block) )
+              self.R[i,:]= np.diag( np.dot( np.dot(R_NE_block, np.diag( self.R[i,:] )), np.transpose(R_NE_block) ) )
           # increase GPS variance
           self.R[:,0:3]= self.R[:,0:3]*(params.mult_factor_pose_gps**2); ################## CAREFUL
           self.R[:,3:6]= self.R[:,3:6]*(params.mult_factor_vel_gps**2);  ################## CAREFUL

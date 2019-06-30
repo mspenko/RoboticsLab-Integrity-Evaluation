@@ -18,7 +18,7 @@ params= ParametersClass.ParametersClass('slam');
 gps= GPSClass.GPSClass(params.num_epochs_static * params.dt_imu, params);
 lidar= LidarClass.LidarClass(params,gps.timeInit);
 imu= IMUClass.IMUClass(params, gps.timeInit);
-estimator=  EstimatorClassSlam.EstimatorClassSlam(imu.inc_msmt[0:3, params.num_epochs_static], params);
+estimator=  EstimatorClassSlam.EstimatorClassSlam(imu.inc_msmt[0:3, 0:params.num_epochs_static], params);
 data_obj= DataClass.DataClass(50000, gps.num_readings, params);#imu.num_readings
 counters= CountersClass.CountersClass(gps, lidar, params);
 
@@ -34,9 +34,8 @@ for epoch in range(imu.num_readings-1):
     print('Epoch -> ',epoch)
     # set the simulation time to the IMU time
     counters.time_sim= imu.time[epoch];
-
     # Turn off GPS updates if start moving
-    if (epoch == params.num_epochs_static):
+    if (epoch == params.num_epochs_static-1):
         params.turn_off_calibration();
         estimator.PX[6,6]= params.sig_phi0**2;
         estimator.PX[7,7]= params.sig_phi0**2;
@@ -49,17 +48,6 @@ for epoch in range(imu.num_readings-1):
     # -------------------------------
     # Store data
     data_obj.store_prediction(epoch, estimator, counters.time_sim);
-
-    # Increase time count
-    counters.increase_time_sums(params);
-    
-    # ------------- IMU -------------
-    estimator.imu_update( imu.msmt[:,epoch], params );
-    # -------------------------------
-    
-    # Store data
-    data_obj.store_prediction(epoch, estimator, counters.time_sim);
-    # ------------------------------------
     
     # ------------- virtual msmt update >> Z vel  -------------  
     if (counters.time_sum_virt_z >= params.dt_virt_z and params.SWITCH_VIRT_UPDATE_Z==1 and params.SWITCH_CALIBRATION==0):
@@ -76,16 +64,14 @@ for epoch in range(imu.num_readings-1):
             estimator.yaw_update( imu.msmt[3:6,epoch], params);
         counters.reset_time_sum_virt_y();
     # ---------------------------------------------------------
-    
+
     # ------------------- GPS -------------------
     if ((counters.time_sim + params.dt_imu) > counters.time_gps and GPS_Index_exceeded == 0):
-        
         if (params.SWITCH_CALIBRATION==0 and params.SWITCH_GPS_UPDATE==1):
             # GPS update -- only use GPS vel if it's fast
             estimator.gps_update( gps.msmt[:,counters.k_gps], gps.R[counters.k_gps,:], params);
             # Yaw update
             if (params.SWITCH_YAW_UPDATE and np.linalg.norm(estimator.XX[3:6]) > params.min_vel_yaw):
-                print('yaw update');
                 estimator.yaw_update( imu.msmt[3:6,epoch], params );
             #estimator.linearize_discretize( imu.msmt[:,epoch], params.dt_imu, params);
 
@@ -94,7 +80,6 @@ for epoch in range(imu.num_readings-1):
         
         # Time GPS counter
         counters.increase_gps_counter();
-        
         # -----Osama----- TODO: Osama what is this??
         if (counters.k_gps < gps.time.shape[0]):
             counters.time_gps= gps.time[counters.k_gps];

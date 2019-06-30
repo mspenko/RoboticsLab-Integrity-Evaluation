@@ -9,10 +9,10 @@ class CountersClass:
       time_gps = None
       time_lidar = None
         
-      k_update = 1
-      k_gps = 1
-      k_lidar = 1
-      k_im = 1
+      k_update = 0
+      k_gps = 0
+      k_lidar = 0
+      k_im = 0
 
       def __init__(self,gps,lidar,params):
           # if it's a simulation --> time is not read from files
