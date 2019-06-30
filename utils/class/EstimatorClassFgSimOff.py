@@ -269,4 +269,10 @@ class EstimatorClassFgSimOff:
            D_bar= np.dot(np.dot(Gu,params.W_odometry_sim),np.transpose(Gu));
 
            return [Phi, D_bar]
+      # ----------------------------------------------
+      # ---------------------------------------------- 
+      def compute_alpha(self,params):
+          self.alpha= np.array([[-math.sin( self.XX(params.ind_yaw) )]
+                      [math.cos( self.XX(params.ind_yaw) )]
+                       [0] ])
 
