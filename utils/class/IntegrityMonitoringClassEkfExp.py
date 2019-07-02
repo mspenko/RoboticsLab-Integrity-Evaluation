@@ -375,7 +375,7 @@ class IntegrityMonitoringCLassEkfExp:
           self.inds_H= [None]*200
           start_ind= 1;
           for num_faults in range(self.n_max):
-              if (params.SWITCH_FACTOR_GRAPHS and (params.SWITCH_SIM==0)):
+              if (params.SWITCH_FACTOR_GRAPHS==1 and (params.SWITCH_SIM==0)):
                   new_H= comb(self.n_L_M + (self.n_M_gps/6), num_faults);
                   self.n_H= self.n_H + new_H;
                   self.inds_H[ start_ind:start_ind+new_H - 1, 1]=np.array([ comb( self.n_L_M + (self.n_M_gps/6), num_faults)]).reshape(2,( self.n_L_M + (self.n_M_gps/6)).shape[0],num_faults.shape[0]);

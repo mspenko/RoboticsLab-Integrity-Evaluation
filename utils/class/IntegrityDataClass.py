@@ -40,7 +40,7 @@ class IntegrityDataClass:
           self.detector_threshold[counters.k_im]= im.T_d**2;
           self.sigma_hat[counters.k_im]= im.sigma_hat;
           self.time[counters.k_im]= counters.time_sim;
-          self.p_eps[counters.k_im]= 2* normcdf(-params.alert_limit, 0, im.sigma_hat);
+          self.p_eps[counters.k_im]= 2* norm.cdf(-params.alert_limit, 0, im.sigma_hat);
           self.M[counters.k_im]= im.M;
             
           if (params.SWITCH_FACTOR_GRAPHS == 0):      
