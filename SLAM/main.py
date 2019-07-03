@@ -27,7 +27,6 @@ LIDAR_Index_exceeded = 0; # TODO: osama is this needeed?
 
 # Initial discretization for cov. propagation
 estimator.linearize_discretize( imu.msmt[:,0], params.dt_imu, params );
-
 # ----------------------------------------------------------
 # -------------------------- LOOP --------------------------
 for epoch in range(imu.num_readings-1):
@@ -73,7 +72,7 @@ for epoch in range(imu.num_readings-1):
             # Yaw update
             if (params.SWITCH_YAW_UPDATE and np.linalg.norm(estimator.XX[3:6]) > params.min_vel_yaw):
                 estimator.yaw_update( imu.msmt[3:6,epoch], params );
-            #estimator.linearize_discretize( imu.msmt[:,epoch], params.dt_imu, params);
+            estimator.linearize_discretize( imu.msmt[:,epoch], params.dt_imu, params);
 
             # Store data
             counters.k_update= data_obj.store_update( counters.k_update, estimator, counters.time_sim );
@@ -84,24 +83,23 @@ for epoch in range(imu.num_readings-1):
         if (counters.k_gps < gps.time.shape[0]):
             counters.time_gps= gps.time[counters.k_gps];
         else:
-           counters.k_gps = counters.k_gps -1 ;
-           GPS_Index_exceeded = 1;
+            counters.k_gps = counters.k_gps -1 ;
+            GPS_Index_exceeded = 1;
     # ----------------------------------------
      # ------------- LIDAR -------------
     if ((counters.time_sim + params.dt_imu) > counters.time_lidar and params.SWITCH_LIDAR_UPDATE==1):
-        
         if (epoch > 2000): #params.num_epochs_static - 3000
             # Read the lidar features
             epochLIDAR= lidar.time[counters.k_lidar,0];
             lidar.get_msmt( epochLIDAR, params );
-            
+
             # Remove people-features for the data set
             lidar.remove_features_in_areas(estimator.XX[0:9]);
             
             # NN data association
             if not(len(lidar.msmt) == 0):
               association= estimator.nearest_neighbor(lidar.msmt[:,0:2], params);
-            
+
             # Lidar update
             if not(len(lidar.msmt) == 0):
               estimator.lidar_update(lidar.msmt[:,0:2], association, params);
@@ -111,12 +109,17 @@ for epoch in range(imu.num_readings-1):
             
             # Add new landmarks
             if not(len(lidar.msmt) == 0):
-              if (not not(lidar.msmt[np.transpose(association) == -1,:])):
-                 estimator.addNewLM( lidar.msmt[np.transpose(association) == -1,:], params.R_lidar )
-            
+              if (association == -1).any:
+                 tmp=[]
+                 for i in range((lidar.msmt).shape[0]):
+                    if (association[i] == -1):
+                       tmp.append(lidar.msmt[i,:])
+                 tmp= np.array(tmp)
+                 if tmp.any():
+                    estimator.addNewLM( tmp, params.R_lidar )
+
             # Lineariza and discretize
             estimator.linearize_discretize( imu.msmt[:,epoch], params.dt_imu, params);
-            
             # Store data
             if not(len(lidar.msmt) == 0):
               data_obj.store_msmts( body2nav_3D.body2nav_3D(lidar.msmt, estimator.XX[0:9]) );# Add current msmts in Nav-frame
