@@ -117,7 +117,7 @@ class DataClass:
           ax.set_xlabel('X Label')
           ax.set_ylabel('Y Label')
           ax.set_zlabel('Z Label')
-
+          ax.set_zlim(-90, 70)
           plt.show()
       '''      
         # ----------------------------------------------

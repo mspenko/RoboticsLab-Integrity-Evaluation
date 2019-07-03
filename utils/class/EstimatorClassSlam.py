@@ -121,7 +121,7 @@ class EstimatorClassSlam:
               self.H_k_lidar[indz,params.ind_yaw]= np.concatenate((np.dot(-dx,spsi) + np.dot(dy,cpsi),np.dot(-dx,cpsi) - np.dot(dy,spsi)),axis = 1)               
 
               # compute the whiten jacobian matrix for lidar msmts
-              self.H_k_lidar= np.kron( np.eye( self.n_L_k ) , params.sqrt_inv_R_lidar ) * self.H_k_lidar;
+              self.H_k_lidar= np.dot( np.kron( np.eye( self.n_L_k ) , params.sqrt_inv_R_lidar ), self.H_k_lidar );
 
       # ----------------------------------------------
       # ----------------------------------------------  
@@ -166,20 +166,20 @@ class EstimatorClassSlam:
           z= np.array([[np.zeros((6,1))],[ self.initial_attitude]])
 
           # Calibration msmt update
-          L= np.transpose(self.PX[0:15,0:15] * params.H_cal)/(params.H_cal*self.PX[0:15,0:15]*np.transpose(params.H_cal) + params.R_cal)
-          z_hat= params.H_cal * self.XX[0:15]
+          L= np.dot( np.dot( self.PX[0:15,0:15] * np.transpose(params.H_cal) ), np.linalg.inv( np.dot( np.dot( params.H_cal, self.PX[0:15,0:15] ), np.transpose(params.H_cal) ) + params.R_cal ) )
+          z_hat= np.dot( params.H_cal, self.XX[0:15] )
           innov= z - z_hat
           innov= pi_to_pi.pi_to_pi(innov)
-          self.XX[0:15]= self.XX[0:15] + L*innov
-          self.PX[0:15,0:15]= self.PX[0:15,0:15] - L * params.H_cal * self.PX[0:15,0:15]
+          self.XX[0:15]= self.XX[0:15] + np.dot( L, innov )
+          self.PX[0:15,0:15]= self.PX[0:15,0:15] - np.dot( np.dot( L, params.H_cal ), self.PX[0:15,0:15] )
 
           # linearize and discretize after every non-IMU update
           tmp = self.linearize_discretize( imu_msmt, params.dt_imu, params)
           self.Phi_k = tmp[0]
           self.D_bar = tmp[1]
           # If GPS is calibrating initial biases, increse bias variance
-          self.D_bar[9:12,9:12]= self.D_bar[9:12,9:12] + np.diag( [params.sig_ba,params.sig_ba,params.sig_ba] )**2
-          self.D_bar[12:15,12:15]= self.D_bar[12:15,12:15] + np.diag( [params.sig_bw,params.sig_bw,params.sig_bw] )**2
+          self.D_bar[9:12,9:12]= self.D_bar[9:12,9:12] + np.diag( [params.sig_ba**2,params.sig_ba**2,params.sig_ba**2] )
+          self.D_bar[12:15,12:15]= self.D_bar[12:15,12:15] + np.diag( [params.sig_bw**2,params.sig_bw**2,params.sig_bw**2] )
 
       # ----------------------------------------------
       # ----------------------------------------------  
@@ -219,7 +219,7 @@ class EstimatorClassSlam:
       # ----------------------------------------------
       def yaw_update(self,w, params):
 
-          n_L= (self.XX.shape[0] - 15) / 2
+          n_L= int((self.XX.shape[0] - 15) / 2)
           H= np.zeros((1, 15 + int(2*n_L)))
           H[0,8]= 1
           R= params.R_yaw_fn( np.linalg.norm(self.XX[3:6]));
@@ -228,8 +228,8 @@ class EstimatorClassSlam:
           innov= z - np.dot(H, self.XX)
           innov= pi_to_pi.pi_to_pi(innov)
           self.XX[8]= pi_to_pi.pi_to_pi(self.XX[8])
-          self.XX= self.XX + L*innov
-          self.PX= self.PX - L*H*self.PX
+          self.XX= self.XX + np.dot( L, innov )
+          self.PX= self.PX - np.dot( np.dot( L, H ), self.PX )
       # ----------------------------------------------
       # ----------------------------------------------
       def yawMeasurement(self, w, params):
@@ -247,13 +247,13 @@ class EstimatorClassSlam:
           self.XX[8]= pi_to_pi.pi_to_pi( self.XX[8] )
           # Update
           R_BN= np.transpose(R_NB_rot.R_NB_rot( self.XX[6], self.XX[7], self.XX[8] ))
-          H= np.array([0,0,1]) * R_BN * np.array([np.zeros(3),np.eye(3),np.zeros((3,9))])
-          L= bj.PX*np.transpose(H) / (H*self.PX*np.transpose(H) + R)
-          z_hat= H * self.XX
+          H= np.dot( np.dot( np.array([0,0,1]), R_BN ), np.array([np.zeros(3),np.eye(3),np.zeros((3,9))]) )
+          L= np.dot( np.dot( self.PX, np.transpose(H) ), np.linalg.inv( np.dot( np.dot( H, self.PX ), np.transpose(H) ) + R ) )
+          z_hat= np.dot( H, self.XX )
           innov= 0 - z_hat
 
-          self.XX= self.XX + L*innov
-          self.PX= self.PX - L*H*self.PX
+          self.XX= self.XX + np.dot( L, innov )
+          self.PX= self.PX - np.dot( np.dot( L, H ), self.PX )
 
           # This is a different option to do the update in Z, but it is more
           # computationally expensive and does not offer better results in my case
@@ -511,20 +511,5 @@ class EstimatorClassSlam:
               if (association[i] != -1 and association[i] != -2):
                   self.appearances[int(association[i])]= self.appearances[int(association[i])] + 1;
           return association
- # ----------------------------------------------
- # ----------------------------------------------  
- #      def yawMeasurement(self,w,r_IMU2rearAxis):
- #          global XX
- #
- #          r= np.array([[-r_IMU2rearAxis],[0],[0]])
- #          v_o= XX[3:6]
- #          R_NB= R_NB_rot.R_NB_rot(XX[6],XX[7],XX[8])
- #          v_a= v_o + R_NB * np.cross(w,r)
- #          v_a= v_a / np.norm(v_a)
- #          self.yaw= math.atan2(v_a[1],v_a[0]) 
- #    
- # ----------------------------------------------
- # ----------------------------------------------     
-# =====================================================================================    
 
 

@@ -31,6 +31,7 @@ estimator.linearize_discretize( imu.msmt[:,0], params.dt_imu, params );
 # -------------------------- LOOP --------------------------
 for epoch in range(imu.num_readings-1):
     print('Epoch -> ',epoch)
+
     # set the simulation time to the IMU time
     counters.time_sim= imu.time[epoch];
     # Turn off GPS updates if start moving
@@ -50,16 +51,21 @@ for epoch in range(imu.num_readings-1):
     
     # ------------- virtual msmt update >> Z vel  -------------  
     if (counters.time_sum_virt_z >= params.dt_virt_z and params.SWITCH_VIRT_UPDATE_Z==1 and params.SWITCH_CALIBRATION==0):
+        print('z')
+        #input(estimator.XX)
         zVelocityUpdate( params.R_virt_Z );
         counters.reset_time_sum_virt_z();
     # ---------------------------------------------------------
 
     # ------------- virtual msmt update >> Y vel  -------------  
     if( counters.time_sum_virt_y >= params.dt_virt_y and params.SWITCH_VIRT_UPDATE_Y and params.SWITCH_CALIBRATION==0):
-         
+        print('y')
+        #input(estimator.XX)         
         # Yaw update
         if (params.SWITCH_YAW_UPDATE==1 and np.norm(estimator.XX[3:6]) > params.min_vel_yaw):
             print('yaw update');
+            print('yaw')
+            input(estimator.XX)
             estimator.yaw_update( imu.msmt[3:6,epoch], params);
         counters.reset_time_sum_virt_y();
     # ---------------------------------------------------------
@@ -67,10 +73,13 @@ for epoch in range(imu.num_readings-1):
     # ------------------- GPS -------------------
     if ((counters.time_sim + params.dt_imu) > counters.time_gps and GPS_Index_exceeded == 0):
         if (params.SWITCH_CALIBRATION==0 and params.SWITCH_GPS_UPDATE==1):
+            print('GPS')
+            #input(estimator.XX)
             # GPS update -- only use GPS vel if it's fast
             estimator.gps_update( gps.msmt[:,counters.k_gps], gps.R[counters.k_gps,:], params);
             # Yaw update
             if (params.SWITCH_YAW_UPDATE and np.linalg.norm(estimator.XX[3:6]) > params.min_vel_yaw):
+                print('yaw update')
                 estimator.yaw_update( imu.msmt[3:6,epoch], params );
             estimator.linearize_discretize( imu.msmt[:,epoch], params.dt_imu, params);
 
@@ -89,6 +98,8 @@ for epoch in range(imu.num_readings-1):
      # ------------- LIDAR -------------
     if ((counters.time_sim + params.dt_imu) > counters.time_lidar and params.SWITCH_LIDAR_UPDATE==1):
         if (epoch > 2000): #params.num_epochs_static - 3000
+            print('LiDAR')
+            #input(estimator.XX)
             # Read the lidar features
             epochLIDAR= lidar.time[counters.k_lidar,0];
             lidar.get_msmt( epochLIDAR, params );
