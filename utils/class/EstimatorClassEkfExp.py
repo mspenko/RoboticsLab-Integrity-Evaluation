@@ -44,7 +44,7 @@ class EstimatorClassEkfExp:
           # Initial attitude
           self.initialize_pitch_and_roll(imu_calibration_msmts)
           # initialize the yaw angle
-          self.XX[params.ind_yaw]= np.deg2rad(params.initial_yaw_angle);
+          self.XX[params.ind_yaw-1]= np.deg2rad(params.initial_yaw_angle);
 
           # save initial attitude for calibration
           self.initial_attitude= self.XX[6:9];
@@ -71,7 +71,7 @@ class EstimatorClassEkfExp:
           # calculates the initial pitch and roll
           # compute gravity from static IMU measurements
           #g_bar= np.mean( imu_calibration_msmts,1 )
-          g_bar= imu_calibration_msmts
+          g_bar= np.mean( imu_calibration_msmts,1 )
           # Books method
           g_bar= -g_bar
           
@@ -103,8 +103,8 @@ class EstimatorClassEkfExp:
           self.Phi_k = tmp[0]
           self.D_bar = tmp[1]
           # If GPS is calibrating initial biases, increse bias variance
-          self.D_bar[9:12,9:12]= self.D_bar[9:12,9:12] + np.diag( [params.sig_ba,params.sig_ba,params.sig_ba] )**2
-          self.D_bar[12:15,12:15]= self.D_bar[12:15,12:15] + np.diag( [params.sig_bw,params.sig_bw,params.sig_bw] )**2
+          self.D_bar[9:12,9:12]= self.D_bar[9:12,9:12] + np.diag( [params.sig_ba**2,params.sig_ba**2,params.sig_ba**2] )
+          self.D_bar[12:15,12:15]= self.D_bar[12:15,12:15] + np.diag( [params.sig_bw**2,params.sig_bw**2,params.sig_bw**2] )
       # ----------------------------------------------
       # ----------------------------------------------  
       def imu_update(self, imu_msmt, params ):
@@ -215,55 +215,52 @@ class EstimatorClassEkfExp:
           self.XX= self.XX + np.dot(L, innov.transpose())
           self.PX= self.PX - np.dot( np.dot(L, H), self.PX)
       # ----------------------------------------------
-      # ----------------------------------------------
+     #* # ----------------------------------------------
 
-      def nearest_neighbor(self, z, params):
+       def nearest_neighbor(self, z, params):
 
           n_F= z.shape[0];
-          n_L= (self.XX.shape[0] - 15) / 2;
-          association= np.ones((1,n_F)) * (-1);
-
+          n_L= int((self.XX.shape[0] - 15) / 2);
+          association= np.ones(n_F) * (-1);
           if (n_F == 0 or n_L == 0):
-             return 0
+             return association
  
           spsi= math.sin(self.XX[8]);
           cpsi= math.cos(self.XX[8]);
-          zHat= np.zeros((2,1));
+          zHat= np.zeros(2);
           # Loop over extracted features
-          print(association)
-          for i in range(1,n_F+1):
+          for i in range(n_F):
               minY= params.threshold_new_landmark;
     
-              for l in range(1,n_L+1):
-                  ind= np.array[(15 + (2*l-1) - 1):(15 + 2*l)]
+              for l in range(n_L):
+                  ind= np.array([15 + 2*l,15 + 2*l +1])
         
-                  dx= self.XX[ind[0]] - self.XX[0];
-                  dy= self.XX[ind[1]] - self.XX[1];
+                  dx= float(self.XX[ind[0]] - self.XX[0]);
+                  dy= float(self.XX[ind[1]] - self.XX[1]);
         
                   zHat[0]=  dx*cpsi + dy*spsi;
                   zHat[1]= -dx*spsi + dy*cpsi;
-                  gamma= np.transpose(z[i,:]) - zHat;
+                  gamma= z[i,:] - zHat;
         
                   H= np.array([[-cpsi, -spsi, -dx*spsi + dy*cpsi,  cpsi, spsi],
                       [spsi, -cpsi, -dx*cpsi - dy*spsi, -spsi, cpsi]]);
-        
-                  Y= np.dot(np.dot(H,self.PX[[0,1,8,ind],[0,1,8,ind]]),np.transpose(H)) + params.R_lidar;
-        
-                  y2= np.dot(np.dot(np.transpose(gamma),inv(Y)),gamma);
-        
+                  
+                  PX_2d= np.array([[float(self.PX[0,0]), float(self.PX[0,1]), float(self.PX[0,8]), float(self.PX[0,ind[0]]), float(self.PX[0,ind[1]])],[float(self.PX[1,0]), float(self.PX[1,1]), float(self.PX[1,8]), float(self.PX[1,ind[0]]), float(self.PX[1,ind[1]])],[float(self.PX[8,0]), float(self.PX[8,1]), float(self.PX[8,8]), float(self.PX[8,ind[0]]), float(self.PX[8,ind[1]])],[float(self.PX[ind[0],0]), float(self.PX[ind[0],1]), float(self.PX[ind[0],8]), float(self.PX[ind[0],ind[0]]), float(self.PX[ind[0],ind[1]])],[float(self.PX[ind[1],0]), float(self.PX[ind[1],1]), float(self.PX[ind[1],8]), float(self.PX[ind[1],ind[0]]), float(self.PX[ind[1],ind[1]])]])
+                  Y= np.dot(np.dot(H,PX_2d),np.transpose(H)) + params.R_lidar;
+                  y2= np.dot(np.dot(np.transpose(gamma),np.linalg.inv(Y)),gamma);
                   if (y2 < minY):
                       minY= y2;
-                      association[i-1]= l;
+                      association[i]= l;
 
               # If the minimum value is very large --> new landmark
               if (minY > params.T_NN and minY < params.threshold_new_landmark):
-                  association[i-1]= 0;
+                  association[i]= -2;
 
 
           # Increase appearances counter
-          for i in range(1,n_F+1):
-              if (association[i-1] != -1 and association[i-1] != 0):
-                  self.appearances[association[i-1]-1]= self.appearances[association[i-1]-1] + 1;
+          for i in range(n_F):
+              if (association[i] != -1 and association[i] != -2):
+                  self.appearances[int(association[i])]= self.appearances[int(association[i])] + 1;
           return association
       # ----------------------------------------------
       # ----------------------------------------------
@@ -297,27 +294,30 @@ class EstimatorClassEkfExp:
           #z= np.delete(z,(ind_to_eliminate,:))
           association = np.delete(association,(ind_to_eliminate))
 
-          # Eliminate features associated to landmarks that has appeared less than X times
-          acc = 0
+        #*  # Eliminate features associated to landmarks that has appeared less than X times
           ind_to_eliminate = []
-          for i in association:  #ind_to_eliminate= self.appearances[association] <= params.min_appearances;
-              if (self.appearances[i] <= params.min_appearances):
+          for i in range(association.shape[0]):
+              if (self.appearances[int(association[i])] <= params.min_appearances):
                  ind_to_eliminate.append(1)
               else:
                  ind_to_eliminate.append(0)
-              acc = acc+1
-
-          acc=0
-          for i in ind_to_eliminate:    #z(ind_to_eliminate,:)= [];
-              if z[acc] == 1:
-                 a = np.delete(a,acc,AXIS = 0)
-              acc = acc+1
           
-          acc = 0
-          for i in ind_to_eliminate:    #association(ind_to_eliminate)= [];
-              if i == 1:
-                 association= np.delete(association,acc)
-              acc = acc+1
+          ind_to_eliminate= np.array(ind_to_eliminate)
+
+          tmp_list = []
+          check= np.shape(ind_to_eliminate)
+          notScalar= len(check)
+          if (notScalar == 0):
+            if (ind_to_eliminate == 1):
+               z=[]
+               association = []
+               return 0
+          else:
+            for i in range(ind_to_eliminate.shape[0]):
+                if (ind_to_eliminate[i] == 1):
+                   tmp_list.append(i)
+            z = np.delete(z,tmp_list,axis = 0)
+            association = np.delete(association,tmp_list)
           
 
           # if no measurent can be associated --> return
@@ -331,9 +331,9 @@ class EstimatorClassEkfExp:
           H= np.zeros((2*lenz,lenx));
 
           #Build Jacobian H
-          spsi= sin(self.XX(9));
-          cpsi= cos(self.XX(9));
-          zHat= zeros(2*lenz,1);
+          spsi= math.sin(self.XX(9));
+          cpsi= math.cos(self.XX(9));
+          zHat= np.zeros((2*lenz,1));
           for i in range(association.shape[0]):
               # Indexes
               indz= 2*i + [-1,0];
@@ -346,30 +346,24 @@ class EstimatorClassEkfExp:
               zHat[indz]= np.array([[dx*cpsi + dy*spsi],[-dx*spsi + dy*cpsi]]);
     
               # Jacobian -- H
-              H[indz,0]= np.array([[-cpsi],[ spsi]])
-              H[indz,1]= np.array([[-spsi],[-cpsi]])
-              H[indz,8]= np.array([[-dx * spsi + dy * cpsi],[-dx * cpsi - dy * spsi]]);
-              H[indz,indx]= np.array([[cpsi, spsi],[-spsi, cpsi]]);
+              H[indz[0],0]= -cpsi
+              H[indz[1],0]= spsi
+              H[indz[0],1]= -spsi
+              H[indz[1],1]= -cpsi
+              H[indz[0],8]= -dx * spsi + dy * cpsi
+              H[indz[1],8]= -dx * cpsi - dy * spsi
     
 
           # Update
-          Y= H*self.PX*np.transpose(H) + R;
-          L= self.PX * np.transpose(H) / Y;
-          zVector= np.transpose(z) 
-          zVector= zVector[:];
-          innov= zVector - zHat;
-
-          # If it is calibrating, update only landmarks
-          if (params.SWITCH_CALIBRATION ==1):
-              XX0= self.XX[0:15];
-              PX0= self.PX[0:15,0:15];
-              self.XX= self.XX + L*innov;
-              self.PX= self.PX - L*H*self.PX;
-              self.XX[0:15]= XX0;
-              self.PX[0:15,0:15]= PX0;
-          else:
-              self.XX= self.XX + L*innov;
-              self.PX= self.PX - L*H*self.PX;
+          self.Y_k= np.dot(np.dot(self.H_k,self.PX),np.transpose(self.H_k)) + R;
+          self.L_k=  np.dot(np.dot（self.PX，np.transpose(self.H_k)),np.inv(self.Y_k));
+          zVector= np.transpose(z);
+          zVector= np.reshape(zVector,(zVector.shape[0]*zVector.shape[0],1))
+          self.gamma_k= zVector - zHat;
+          self.q_k= np.dot(np.dot(np.transpose(self.gamma_k),np.inv(self.Y_k)),self.gamma_k);
+          self.XX= self.XX + np.dot(self.L_k,self.gamma_k);
+          self.PX= self.PX - np.dot(np.dot(self.L_k,self.H_k),self.PX);
+          self.number_of_associated_LMs= self.association_no_zeros.shape[0];
       # ----------------------------------------------
       # ----------------------------------------------  
  
@@ -381,7 +375,7 @@ class EstimatorClassEkfExp:
           minPXLM= minPXLM * np.ones((PXLM.shape[0],1));
           newDiagLM= max(PXLM,minPXLM);
           diffDiagLM= PXLM - newDiagLM;
-          self.PX[15:,15:]= self.PX[15:end,15:end] - np.diag( diffDiagLM )  
+          self.PX[15:,15:]= self.PX[15:,15:] - np.diag( diffDiagLM )  
       # ----------------------------------------------
       # ----------------------------------------------   
       def discretize(self,F, G, S, dT):
@@ -397,7 +391,7 @@ class EstimatorClassEkfExp:
           # Proper method
           EXP= expm(C*dT)
           self.Phi_k= np.transpose(EXP[15:,15:])
-          self.D_bar= self.Phi_k * EXP[0:15,15:]
+          #self.D_bar= self.Phi_k * EXP[0:15,15:]
 
           # Simplified method
           self.D_bar= np.dot( np.dot( (G*dT) , (S/dT) ) , np.transpose((G*dT)) ) # simplified version
