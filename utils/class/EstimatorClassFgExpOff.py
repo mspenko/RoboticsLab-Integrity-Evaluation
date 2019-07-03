@@ -102,7 +102,7 @@ class EstimatorClassFgExpOff:
           # Proper method
           EXP= expm(C*dT)
           self.Phi_k= np.transpose(EXP[15:,15:])
-          self.D_bar= self.Phi_k * EXP[0:15,15:]
+          #self.D_bar= self.Phi_k * EXP[0:15,15:]
           # Simplified method
           self.D_bar= np.dot( np.dot( (G*dT) , (S/dT) ) , np.transpose((G*dT)) ) # simplified version
       # ----------------------------------------------
