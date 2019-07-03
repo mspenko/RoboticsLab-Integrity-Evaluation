@@ -7,7 +7,7 @@ class EstimatorClassEkfExp:
 
       XX= np.zeros((15,1))
       x_true= np.zeros((3,1))
-      alpha # state of interest extraction vector
+      alpha = None # state of interest extraction vector
       PX= np.zeros(15)
         
         
@@ -44,14 +44,14 @@ class EstimatorClassEkfExp:
           # Initial attitude
           self.initialize_pitch_and_roll(imu_calibration_msmts)
           # initialize the yaw angle
-          self.XX(params.ind_yaw)= np.deg2rad(params.initial_yaw_angle);
+          self.XX[params.ind_yaw]= np.deg2rad(params.initial_yaw_angle);
 
           # save initial attitude for calibration
           self.initial_attitude= self.XX[6:9];
 
           # initialize covariance
-          self.PX[9:12, 9:12]= np.diag( [params.sig_ba,params.sig_ba,params.sig_ba] )**2;
-          self.PX[12:15, 12:15]= np.diag( [params.sig_bw,params.sig_bw,params.sig_bw] )**2;
+          self.PX[9:12,9:12]= np.diag( [params.sig_ba,params.sig_ba,params.sig_ba] )**2;
+          self.PX[12:15,12:15]= np.diag( [params.sig_bw,params.sig_bw,params.sig_bw] )**2;
             
           # load map if exists
           tdir = params.path+'landmark_map.mat'
@@ -455,7 +455,7 @@ class EstimatorClassEkfExp:
           self.discretize(F, G, S, dT);
       # ----------------------------------------------
       # ----------------------------------------------
-      def yaw= yawMeasurement(self, w, params)
+      def yawMeasurement(self, w, params):
  
           r= np.array([[-params.r_IMU2rearAxis],[ 0], [0]]);
           v_o= self.XX[3:6];
@@ -464,3 +464,4 @@ class EstimatorClassEkfExp:
           v_a= v_o + np.dot(R_NB,np.cross(w,r));
           v_a= np.dot(v_a,np.inv(np.norm(v_a)));
           yaw= math.atan2(v_a[1],v_a[0]);
+          return yaw
