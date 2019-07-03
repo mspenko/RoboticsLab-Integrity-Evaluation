@@ -6,7 +6,6 @@ import pi_to_pi
 import FG_fn
 import R_NB_rot
 import Q_BE_fn
-import nearestNeighbor
 import body2nav_3D
 import math
 
@@ -41,7 +40,7 @@ class EstimatorClassSlam:
       T_d= 0  # detector threshold
       q_d= 0  # detector for the window of time
       initial_attitude =  None # save initial attitude for the calibration of IM?U biases
-      appearances= np.zeros((1,300)) # if there are more than 300 landmarks, something's wrong
+      appearances= np.zeros(300) # if there are more than 300 landmarks, something's wrong
       FoV_landmarks_at_k =  None # landmarks in the field of view
       current_wp_ind= 1  # index of the sought way point
       goal_is_reached= 0
@@ -155,7 +154,6 @@ class EstimatorClassSlam:
 
           # Discretize system for IMU time (only for variance calculations)
           self.discretize(F, G, S, dT);
-
           
       # ----------------------------------------------
 
@@ -272,7 +270,6 @@ class EstimatorClassSlam:
       # ----------------------------------------------
       # ----------------------------------------------
       def gps_update(self, z, R, params):
-
           n_L= ((self.XX).shape[0] - 15) / 2
           # if we are fast enough --> use GPS velocity msmt
           if (np.linalg.norm(z[3:6]) > params.min_vel_gps and params.SWITCH_GPS_VEL_UPDATE==1): # sense velocity
@@ -301,9 +298,8 @@ class EstimatorClassSlam:
 
           if np.all(association == -1):
              return 0
-
           # Eliminate the non-associated features
-          ind_to_eliminate= association == -1 or association == 0;
+          ind_to_eliminate= (association == -1) | (association == -2);
 
           tmp_list = []
           check= np.shape(ind_to_eliminate)
@@ -311,41 +307,43 @@ class EstimatorClassSlam:
           if (notScalar == 0):
             if (ind_to_eliminate == 1):
                z=[]
+               association = []
                return 0
           else:
             for i in range(ind_to_eliminate.shape[0]):
                 if (ind_to_eliminate[i] == 1):
                    tmp_list.append(i)
             z = np.delete(z,tmp_list,axis = 0)
-
-          #z= np.delete(z,(ind_to_eliminate,:))
-          association = np.delete(association,(ind_to_eliminate))
+            association = np.delete(association,tmp_list)
 
           # Eliminate features associated to landmarks that has appeared less than X times
-          acc = 0
           ind_to_eliminate = []
-          for i in association:  #ind_to_eliminate= self.appearances[association] <= params.min_appearances;
-              if (self.appearances[i] <= params.min_appearances):
+          for i in range(association.shape[0]):
+              if (self.appearances[int(association[i])] <= params.min_appearances):
                  ind_to_eliminate.append(1)
               else:
                  ind_to_eliminate.append(0)
-              acc = acc+1
-
-          acc=0
-          for i in ind_to_eliminate:    #z(ind_to_eliminate,:)= [];
-              if z[acc] == 1:
-                 a = np.delete(a,acc,AXIS = 0)
-              acc = acc+1
           
-          acc = 0
-          for i in ind_to_eliminate:    #association(ind_to_eliminate)= [];
-              if i == 1:
-                 association= np.delete(association,acc)
-              acc = acc+1
+          ind_to_eliminate= np.array(ind_to_eliminate)
+
+          tmp_list = []
+          check= np.shape(ind_to_eliminate)
+          notScalar= len(check)
+          if (notScalar == 0):
+            if (ind_to_eliminate == 1):
+               z=[]
+               association = []
+               return 0
+          else:
+            for i in range(ind_to_eliminate.shape[0]):
+                if (ind_to_eliminate[i] == 1):
+                   tmp_list.append(i)
+            z = np.delete(z,tmp_list,axis = 0)
+            association = np.delete(association,tmp_list)
           
 
           # if no measurent can be associated --> return
-          if isempty(z):
+          if not(z.any()):
               return 0
 
           lenz= association.shape[0];
@@ -355,79 +353,85 @@ class EstimatorClassSlam:
           H= np.zeros((2*lenz,lenx));
 
           #Build Jacobian H
-          spsi= sin(self.XX(9));
-          cpsi= cos(self.XX(9));
-          zHat= zeros(2*lenz,1);
+          spsi= float( math.sin(self.XX[8]) );
+          cpsi= float( math.cos(self.XX[8]) );
+          zHat= np.zeros(int(2*lenz));
           for i in range(association.shape[0]):
               # Indexes
-              indz= 2*i + [-1,0];
-              indx= 15 + 2*association[i] + [-1,0];
+              indz= np.array([ int(2*i), int(2*i + 1) ]);
+              indx= [ int(15 + 2*association[i]), int(15 + 2*association[i] + 1) ];
     
-              dx= self.XX[indx[0]] - self.XX[0];
-              dy= self.XX[indx[1]] - self.XX[1];
-    
+              dx= float(self.XX[indx[0]] - self.XX[0]);
+              dy= float(self.XX[indx[1]] - self.XX[1]);
+
               # Predicted measurement
-              zHat[indz]= np.array([[dx*cpsi + dy*spsi],[-dx*spsi + dy*cpsi]]);
+              zHat[[indz[0],indz[1]]]= np.array([dx*cpsi + dy*spsi,-dx*spsi + dy*cpsi]);
     
               # Jacobian -- H
-              H[indz,0]= np.array([[-cpsi],[ spsi]])
-              H[indz,1]= np.array([[-spsi],[-cpsi]])
-              H[indz,8]= np.array([[-dx * spsi + dy * cpsi],[-dx * cpsi - dy * spsi]]);
-              H[indz,indx]= np.array([[cpsi, spsi],[-spsi, cpsi]]);
-    
+              H[indz[0],0]= -cpsi
+              H[indz[1],0]= spsi
+              H[indz[0],1]= -spsi
+              H[indz[1],1]= -cpsi
+              H[indz[0],8]= -dx * spsi + dy * cpsi
+              H[indz[1],8]= -dx * cpsi - dy * spsi
+              H[indz[0],indx[0]]= cpsi
+              H[indz[1],indx[0]]= -spsi
+              H[indz[0],indx[1]]= spsi
+              H[indz[1],indx[1]]= cpsi
+          zHat= np.transpose([zHat])
 
           # Update
-          Y= H*self.PX*np.transpose(H) + R;
-          L= self.PX * np.transpose(H) / Y;
-          zVector= np.transpose(z) 
-          zVector= zVector[:];
+          Y= np.dot( np.dot( H, self.PX ), np.transpose(H) ) + R;
+          L= np.dot( np.dot( self.PX, np.transpose(H) ), np.linalg.inv(Y) );
+          z_size= np.shape(z)
+          zVector= z.reshape([int(z_size[0]*z_size[1]),1]);
           innov= zVector - zHat;
 
           # If it is calibrating, update only landmarks
           if (params.SWITCH_CALIBRATION ==1):
               XX0= self.XX[0:15];
               PX0= self.PX[0:15,0:15];
-              self.XX= self.XX + L*innov;
-              self.PX= self.PX - L*H*self.PX;
+              self.XX= self.XX + np.dot( L, innov );
+              self.PX= self.PX - np.dot( np.dot( L, H ), self.PX );
               self.XX[0:15]= XX0;
               self.PX[0:15,0:15]= PX0;
           else:
-              self.XX= self.XX + L*innov;
-              self.PX= self.PX - L*H*self.PX;
+              if (self.XX).shape[1] > 1:
+                input('start')
+              self.XX= self.XX + np.dot( L, innov);
+              self.PX= self.PX - np.dot( np.dot( L, H ), self.PX );
       # ----------------------------------------------
       # ----------------------------------------------    
       def addNewLM(self, z, R):
 
           # Number of landmarks to add
-          n_L= z.shape[1];
+          n_L= z.shape[0];
 
           # update total number of landmarks
           self.num_landmarks= self.num_landmarks + n_L;
 
           # Add new landmarks to state vector
           z= body2nav_3D.body2nav_3D(z,self.XX[0:9]);
-          zVector= np.transpose(z)
-          zVector= zVector[:]
-          tmp0 = XX.shape[0]
-          tmp1 = XX.shape[1]
-          XX = np.concatenate(XX,zVector)
-          XX = np.reshape(XX,(tmp0+1,tmp1+2*n_L))
+          z_size= np.shape(z)
+          zVector= np.reshape(z, [z_size[0]*z_size[1],1])
+          self.XX = np.concatenate((self.XX,zVector),axis=0)
 
           spsi= math.sin(self.XX[8]);
           cpsi= math.cos(self.XX[8]);
           for i in range(n_L):
-              ind= np.arange((15 + (2*i-1)),(15 + 2*i))
-    
-              dx= self.XX[ind[1]] - self.XX[1];
-              dy= self.XX[ind[1]] - self.XX[1];
+              ind= np.array([(15 + 2*i),(15 + 2*i + 1)])
+              dx= float(self.XX[ind[0]] - self.XX[0]);
+              dy= float(self.XX[ind[1]] - self.XX[1]);
     
               H= np.array([[-cpsi, -spsi, -dx*spsi + dy*cpsi],[spsi,  -cpsi, -dx*cpsi - dy*spsi]]) 
-              Y= H * self.PX[0:2,8] * np.transpose(H) + R
+              PX_2d= np.array([[float(self.PX[0,0]), float(self.PX[0,1]), float(self.PX[0,8])],[float(self.PX[1,0]), float(self.PX[1,1]), float(self.PX[1,8])],[float(self.PX[8,0]), float(self.PX[8,1]), float(self.PX[8,8])]])
+              Y= np.dot( np.dot(H, PX_2d), np.transpose(H)) + R
               
-              tmp0 = PX.shape[0]
-              tmp1 = PX.shape[1]
-              PX = np.concatenate(PX,Y)
-              PX = np.reshape(PX,(tmp0+1,tmp1+2))
+              Y_size = np.shape(Y)
+              PX_size = np.shape(self.PX)
+              self.PX = np.concatenate((self.PX,np.zeros([PX_size[1],Y_size[1]])),axis=1)
+              tmp= np.concatenate((np.zeros([Y_size[0],PX_size[1]]),Y),axis=1)
+              self.PX = np.concatenate((self.PX,tmp),axis=0)
       # ----------------------------------------------
       # ----------------------------------------------    
       def increase_landmarks_cov(self, minPXLM):
@@ -435,10 +439,13 @@ class EstimatorClassSlam:
           if ((self.PX).shape[0] == 15): 
              return 0 
           PXLM= np.diag( self.PX[15:,15:] )
-          minPXLM= minPXLM * np.ones((PXLM.shape[0],1));
-          newDiagLM= max(PXLM,minPXLM);
+          newDiagLM=[]
+          for i in range(PXLM.shape[0]):
+            newDiagLM.append(max(PXLM[i],minPXLM))
+          
+          newDiagLM= np.array(newDiagLM);
           diffDiagLM= PXLM - newDiagLM;
-          self.PX[15:,15:]= self.PX[15:end,15:end] - np.diag( diffDiagLM )
+          self.PX[15:,15:]= self.PX[15:,15:] - np.diag( diffDiagLM )
 
 # =====================================================================================  
       def discretize(self,F, G, S, dT):
@@ -447,10 +454,6 @@ class EstimatorClassSlam:
           # sysc= ss(F, zeros(15,1), zeros(1,15), 0)
           # sysd= c2d(sysc, dT)
           # Phi= sysd.A
-          print(np.shape(-F))
-          print(np.shape(G))
-          print(np.shape(S))
-          print(np.shape(np.dot(G,np.dot(S,np.transpose(G)))))
           # Methdo to obtain covariance matrix for dicrete system
           C= np.concatenate((np.concatenate((-F, np.dot(G,np.dot(S,np.transpose(G)))),axis = 1),np.concatenate((np.zeros([15,15]), np.transpose(F)),axis = 1)),axis = 0)
 
@@ -463,53 +466,50 @@ class EstimatorClassSlam:
           self.D_bar= np.dot( np.dot( (G*dT) , (S/dT) ) , np.transpose((G*dT)) ) # simplified version
       # ----------------------------------------------
       # ----------------------------------------------
-      def nearest_neighbor(obj, z, params):
+      def nearest_neighbor(self, z, params):
 
           n_F= z.shape[0];
-          n_L= (obj.XX.shape[0] - 15) / 2;
-          association= np.ones((1,n_F)) * (-1);
-
+          n_L= int((self.XX.shape[0] - 15) / 2);
+          association= np.ones(n_F) * (-1);
           if (n_F == 0 or n_L == 0):
-             return 0
+             return association
  
-          spsi= math.sin(obj.XX[8]);
-          cpsi= math.cos(obj.XX[8]);
-          zHat= np.zeros((2,1));
+          spsi= math.sin(self.XX[8]);
+          cpsi= math.cos(self.XX[8]);
+          zHat= np.zeros(2);
           # Loop over extracted features
-          print(association)
-          for i in range(1,n_F+1):
+          for i in range(n_F):
               minY= params.threshold_new_landmark;
     
-              for l in range(1,n_L+1):
-                  ind= np.array[(15 + (2*l-1) - 1):(15 + 2*l)]
+              for l in range(n_L):
+                  ind= np.array([15 + 2*l,15 + 2*l +1])
         
-                  dx= obj.XX[ind[0]] - obj.XX[0];
-                  dy= obj.XX[ind[1]] - obj.XX[1];
+                  dx= float(self.XX[ind[0]] - self.XX[0]);
+                  dy= float(self.XX[ind[1]] - self.XX[1]);
         
                   zHat[0]=  dx*cpsi + dy*spsi;
                   zHat[1]= -dx*spsi + dy*cpsi;
-                  gamma= np.transpose(z[i,:]) - zHat;
+                  gamma= z[i,:] - zHat;
         
                   H= np.array([[-cpsi, -spsi, -dx*spsi + dy*cpsi,  cpsi, spsi],
                       [spsi, -cpsi, -dx*cpsi - dy*spsi, -spsi, cpsi]]);
-        
-                  Y= np.dot(np.dot(H,obj.PX[[0,1,8,ind],[0,1,8,ind]]),np.transpose(H)) + params.R_lidar;
-        
-                  y2= np.dot(np.dot(np.transpose(gamma),inv(Y)),gamma);
-        
+                  
+                  PX_2d= np.array([[float(self.PX[0,0]), float(self.PX[0,1]), float(self.PX[0,8]), float(self.PX[0,ind[0]]), float(self.PX[0,ind[1]])],[float(self.PX[1,0]), float(self.PX[1,1]), float(self.PX[1,8]), float(self.PX[1,ind[0]]), float(self.PX[1,ind[1]])],[float(self.PX[8,0]), float(self.PX[8,1]), float(self.PX[8,8]), float(self.PX[8,ind[0]]), float(self.PX[8,ind[1]])],[float(self.PX[ind[0],0]), float(self.PX[ind[0],1]), float(self.PX[ind[0],8]), float(self.PX[ind[0],ind[0]]), float(self.PX[ind[0],ind[1]])],[float(self.PX[ind[1],0]), float(self.PX[ind[1],1]), float(self.PX[ind[1],8]), float(self.PX[ind[1],ind[0]]), float(self.PX[ind[1],ind[1]])]])
+                  Y= np.dot(np.dot(H,PX_2d),np.transpose(H)) + params.R_lidar;
+                  y2= np.dot(np.dot(np.transpose(gamma),np.linalg.inv(Y)),gamma);
                   if (y2 < minY):
                       minY= y2;
-                      association[i-1]= l;
+                      association[i]= l;
 
               # If the minimum value is very large --> new landmark
               if (minY > params.T_NN and minY < params.threshold_new_landmark):
-                  association[i-1]= 0;
+                  association[i]= -2;
 
 
           # Increase appearances counter
-          for i in range(1,n_F+1):
-              if (association[i-1] != -1 and association[i-1] != 0):
-                  obj.appearances[association[i-1]-1]= obj.appearances[association[i-1]-1] + 1;
+          for i in range(n_F):
+              if (association[i] != -1 and association[i] != -2):
+                  self.appearances[int(association[i])]= self.appearances[int(association[i])] + 1;
           return association
  # ----------------------------------------------
  # ----------------------------------------------  

@@ -25,7 +25,7 @@ class LidarClass():
       def __init__(self,params,init_time):
           # Initialization (it will be obatined during the run)
           self.index_of_last_static_lidar_epoch= 0
-            
+          
           if (params.SWITCH_SIM==1):
              self.time= np.array()
              return 0
@@ -42,16 +42,20 @@ class LidarClass():
           except:
              print("[MSG] no area to remove")
           #Use the GPS first reading time as reference
-          self.time[:,1]= self.time[:,1] - np.ones(self.time.shape[0])*init_time
+          self.time[:,1]= self.time[:,1] - np.ones((self.time).shape[0])*init_time
           
           #If some of the initial times are negative (prior to first GPS reading) --> eliminate them
-          acc = 0
-          for i in self.time[:,1]:
-              if(i<0):
-                 np.delete(self.time,acc,axis = 0)
-              acc = acc+1
-          #number of lidar scans
-          self.num_readings= self.time.shape[0]
+
+          ind_to_eliminate= self.time[:,1]<0
+
+          tmp_list = []
+          check= np.shape(ind_to_eliminate)
+          notScalar= len(check)
+          for i in range(ind_to_eliminate.shape[0]):
+              if (ind_to_eliminate[i] == 1):
+                 tmp_list.append(i)
+          self.time = np.delete(self.time,tmp_list,axis = 0)
+          self.num_readings= (self.time).shape[0]
 
 
       # ----------------------------------------------
@@ -62,8 +66,11 @@ class LidarClass():
             fileName = params.file_name_lidar_path+'textFiles/Epoch'+str(int(epoch))+'.txt'
             # loads the z variable with range and bearing
             self.msmt= np.loadtxt(fileName)
+
             if not (type(self.msmt[0]) is np.ndarray ):
                self.msmt= np.array([self.msmt])
+
+            self.msmt= np.concatenate((np.transpose([-1*self.msmt[:,1]]), np.transpose([-1*self.msmt[:,0]])),axis=1)
             # if there are features --> prepare the measurement
             if (self.msmt.shape[0] !=0):
                 if (params.SWITCH_REMOVE_FAR_FEATURES==1):
@@ -80,8 +87,11 @@ class LidarClass():
           if (self.msmt).shape[0] == 1:
             d= self.msmt[0,0]**2 + self.msmt[0,1]**2 
           else:
-            d= self.msmt[:][0]**2 + self.msmt[:][1]**2 
-          
+            d= []
+            for i in range( (self.msmt).shape[0] ):
+              d.append(self.msmt[i,0]**2 + self.msmt[i,1]**2)
+            d= np.array(d)
+
           check= np.shape(d)
           notScalar= len(check)
           if (notScalar == 0):
