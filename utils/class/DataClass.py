@@ -113,7 +113,19 @@ class DataClass:
           fig = plt.figure()
           ax = fig.add_subplot(111, projection='3d')
 
-          ax.scatter((self.pred.XX[0,:]), (self.pred.XX[1,:]), (self.pred.XX[2,:]), c='r', marker='o')
+          ax.scatter((self.pred.XX[0,:]), (self.pred.XX[1,:]), (self.pred.XX[2,:]), c='r', marker='o',s=0.5)
+          ax.scatter((gps.msmt[0,:]),(gps.msmt[1,:]),(gps.msmt[2,:]),c='b',marker = '*',s = 0.5)
+          ax.scatter((self.update.XX[0,:]),(self.update.XX[1,:]),(self.update.XX[2,:]),c='y',marker = '*',s = 0.5)
+          if (estimator.num_landmarks>0):
+              lm_map= np.concatenate((estimator.XX[15::2], estimator.XX[16::2]),axis = 1)
+              lm_to_eleminate = []
+              for i in range(1,estimator.num_landmarks+1):
+                  if (estimator.appearances[i-1]<params.min_appearances):
+                     lm_to_eleminate.append(i)
+          ax.scatter((lm_map[:,0]), (lm_map[:,1]),(np.zeros(lm_map.shape[0])),c = 'g',marker = 'x',s = 1.0)  
+          #ax.scatter((self.msmts[:,0]), (self.msmts[:,1]),(np.zeros(lm_map.shape[0])),c = 'b',marker = 'x',s = 1.0)   
+              
+
           ax.set_xlabel('X Label')
           ax.set_ylabel('Y Label')
           ax.set_zlabel('Z Label')
