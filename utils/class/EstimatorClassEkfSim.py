@@ -90,8 +90,8 @@ class EstimatorClassEfkSim:
       # ----------------------------------------------
       # ----------------------------------------------
       def compute_alpha(self,params):
-          self.alpha= np.array([[-sin( self.XX(params.ind_yaw) )]
-                      [cos( self.XX(params.ind_yaw) )]
+          self.alpha= np.array([[-math.sin( self.XX(params.ind_yaw) )]
+                      [math.cos( self.XX(params.ind_yaw) )]
                        [0] ])
       # ----------------------------------------------
       # ----------------------------------------------
@@ -147,8 +147,8 @@ class EstimatorClassEfkSim:
               else:
                     break
           #Compute change in G to point towards current waypoint
-          delta_steering = pi_to_pi(np.arctan2(current_wp(1) - xx(1), current_wp(1) - xx(1) ) - xx(2))
-          delta_steering = pi_to_pi(delta_steering - self.steering_angle)
+          delta_steering = pi_to_pi.pi_to_pi(np.arctan2(current_wp(1) - xx(1), current_wp(1) - xx(1) ) - xx(2))
+          delta_steering = pi_to_pi.pi_to_pi(delta_steering - self.steering_angle)
 
           # limit rate
           max_delta = params.max_delta_steering * params.dt_sim
@@ -156,7 +156,7 @@ class EstimatorClassEfkSim:
               delta_steering = np.sign(delta_steering) * max_delta
 
           # limit angle
-          self.steering_angle = pi_to_pi( self.steering_angle + delta_steering )
+          self.steering_angle = pi_to_pi.pi_to_pi( self.steering_angle + delta_steering )
           if (abs(self.steering_angle) > params.max_steering):
               self.steering_angle = np.sign(self.steering_angle) * params.max_steering
 
@@ -301,9 +301,9 @@ class EstimatorClassEfkSim:
         H= np.zeros((2*lenz,lenx));
 
         #Build Jacobian H
-        spsi= sin(self.XX(8));
-        cpsi= cos(self.XX(8));
-        zHat= zeros(int(2*lenz));
+        spsi= math.sin(self.XX[7]);
+        cpsi= math.cos(self.XX[7]);
+        zHat= math.zeros(int(2*lenz));
         for i in range(association.shape[0]):
             # Indexes
             indz= np.array([ int(2*i), int(2*i + 1) ]);
