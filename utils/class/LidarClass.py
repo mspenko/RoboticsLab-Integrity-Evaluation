@@ -71,6 +71,7 @@ class LidarClass():
                self.msmt= np.array([self.msmt])
 
             self.msmt= np.concatenate((np.transpose([-1*self.msmt[:,1]]), np.transpose([-1*self.msmt[:,0]])),axis=1)
+            
             # if there are features --> prepare the measurement
             if (self.msmt.shape[0] !=0):
                 if (params.SWITCH_REMOVE_FAR_FEATURES==1):

@@ -148,7 +148,6 @@ class EstimatorClassEkfExp:
           # udpate estimate
           self.XX[0:15]= self.XX[0:15] + params.dt_imu * x_dot
           self.PX[0:15,0:15]= np.dot( np.dot(self.Phi_k, self.PX[0:15,0:15]), np.transpose(self.Phi_k) ) + self.D_bar
-          self.D_bar[12:15,12:15]= self.D_bar[12:15,12:15] + np.diag( [params.sig_bw,params.sig_bw,params.sig_bw] )**2
       # ----------------------------------------------
       # ----------------------------------------------  
       def yaw_update(self,w, params):
@@ -396,7 +395,7 @@ class EstimatorClassEkfExp:
           # Phi= sysd.A
 
           # Methdo to obtain covariance matrix for dicrete system
-          C= np.transpose(np.concatenate((np.concatenate((-F, np.dot(G,np.dot(S,np.transpose(G)))),axis = 0),np.concatenate((np.zeros([15,15]), np.transpose(F)),axis = 0)),axis = 1))
+          C= np.concatenate((np.concatenate((-F, np.dot(G,np.dot(S,np.transpose(G)))),axis = 1),np.concatenate((np.zeros([15,15]), np.transpose(F)),axis = 1)),axis = 0)
 
           # Proper method
           EXP= expm(C*dT)

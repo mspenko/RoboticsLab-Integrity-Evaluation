@@ -34,10 +34,10 @@ estimator.linearize_discretize( imu.msmt[:,0], params.dt_imu, params );
 # -------------------------- LOOP --------------------------
 for epoch in range(imu.num_readings):
     print('Epoch -> '+str(epoch))
-    
+
     # set the simulation time to the IMU time
     counters.time_sim= imu.time[epoch]
-    
+
     # Turn off GPS updates if start moving
     if (epoch == params.num_epochs_static):
         params.turn_off_calibration();
@@ -85,18 +85,17 @@ for epoch in range(imu.num_readings):
     
     
     # ------------------- GPS -------------------
-    if ((counters.time_sim + params.dt_imu) > counters.time_gps): 
-        input(counters.k_gps)
+    if ((counters.time_sim + params.dt_imu) > counters.time_gps):
+
         if ( (params.SWITCH_CALIBRATION==0) and (params.SWITCH_GPS_UPDATE==1) ):
-            input(estimator.XX)
             # GPS update -- only use GPS vel if it's fast
-            estimator.gps_update( gps.msmt[:,counters.k_gps], gps.R[:,counters.k_gps], params);
-            
+            estimator.gps_update( gps.msmt[:,counters.k_gps], gps.R[counters.k_gps,:], params);
+
             # This is used to store gps msmt and R recieved at lidar epoch for FG
             gps.IS_GPS_AVAILABLE= 1;
             current_gps_msmt= gps.msmt[:,counters.k_gps];
-            current_gps_R= gps.R[:,counters.k_gps];
-            input(estimator.XX)
+            current_gps_R= gps.R[counters.k_gps,:];
+
             # Yaw update
             if (params.SWITCH_YAW_UPDATE and np.linalg.norm(estimator.XX[3:6]) > params.min_vel_yaw):
                 print('yaw update');
@@ -105,7 +104,7 @@ for epoch in range(imu.num_readings):
             
             # Store data
             counters.k_update= data_obj.store_update( counters.k_update, estimator, counters.time_sim );
-            input(estimator.XX)
+
         # Time GPS counter
         if (counters.k_gps == gps.num_readings):
             params.turn_off_gps();
@@ -119,13 +118,14 @@ for epoch in range(imu.num_readings):
     if ((counters.time_sim + params.dt_imu) > counters.time_lidar and params.SWITCH_LIDAR_UPDATE):
         
         if (epoch > params.num_epochs_static):
+
             # Read the lidar features
-            epochLIDAR= lidar.time[counters.k_lidar,1];
+            epochLIDAR= lidar.time[counters.k_lidar,0];
             lidar.get_msmt( epochLIDAR, params );
-            
+
             # Remove people-features for the data set
             lidar.remove_features_in_areas(estimator.XX[0:9]);
-            
+
             # NN data association
             estimator.nearest_neighbor(lidar.msmt[:,0:2], params);
 
