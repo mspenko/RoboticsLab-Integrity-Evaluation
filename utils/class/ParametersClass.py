@@ -340,10 +340,10 @@ class ParametersClass:
 
            if(self.SWITCH_SIM == 1):
                 self.ind_pose= np.array([0,1,2])
-                self.ind_yaw= 3
+                self.ind_yaw= 2
            else:
-                self.ind_pose = np.array([1,2,9])
-                self.ind_yaw = 9
+                self.ind_pose = np.array([0,1,8])
+                self.ind_yaw = 8
 
            self.g_N= np.array([[0], [0], [self.g_val]]) # G estimation (sense is same at grav acceleration in nav-frame)
            self.sig_cal_pos_blkMAtrix= np.diag(np.array([self.sig_cal_pos, self.sig_cal_pos, self.sig_cal_pos]))

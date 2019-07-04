@@ -14,13 +14,15 @@ import DataClass
 import body2nav_3D
 import IntegrityMonitoringClassEkfExp
 import EstimatorClassEkfExp
+import FGDataInputClass
+
 # create objects
 params= ParametersClass.ParametersClass("localization_kf");
-#im= IntegrityMonitoringClassEkfExp.IntegrityMonitoringClassEkfExp(params);
 gps= GPSClass.GPSClass(params.num_epochs_static * params.dt_imu, params);
 lidar= LidarClass.LidarClass(params, gps.timeInit);
 imu= IMUClass.IMUClass(params, gps.timeInit);
-estimator= EstimatorClassEkfExp.EstimatorClassEkfExp(imu.msmt[0:4, params.num_epochs_static], params);
+estimator= EstimatorClassEkfExp.EstimatorClassEkfExp(imu.msmt[0:3, 0:params.num_epochs_static], params);
+im= IntegrityMonitoringClassEkfExp.IntegrityMonitoringClassEkfExp(params, estimator);
 data_obj= DataClass.DataClass(imu.num_readings, lidar.num_readings, params);
 counters= CountersClass.CountersClass(gps, lidar, params);
 FG= FGDataInputClass.FGDataInputClass(lidar.num_readings);
@@ -31,11 +33,10 @@ estimator.linearize_discretize( imu.msmt[:,0], params.dt_imu, params );
 # ----------------------------------------------------------
 # -------------------------- LOOP --------------------------
 for epoch in range(imu.num_readings):
-
     print('Epoch -> '+str(epoch))
     
     # set the simulation time to the IMU time
-    counters.time_sim= imu.time(epoch);
+    counters.time_sim= imu.time[epoch]
     
     # Turn off GPS updates if start moving
     if (epoch == params.num_epochs_static):
@@ -43,13 +44,12 @@ for epoch in range(imu.num_readings):
         estimator.PX[6,6]= params.sig_phi0**2;
         estimator.PX[7,7]= params.sig_phi0**2;
         estimator.PX[8,8]= params.sig_yaw0**2;
-    end
         
     # Increase time count
     counters.increase_time_sums(params);
     
     # ------------- IMU -------------
-    estimator.imu_update( imu.msmt[:,epoch+1], params );
+    estimator.imu_update( imu.msmt[:,epoch], params );
     # -------------------------------
     
     # Store data
@@ -64,57 +64,55 @@ for epoch in range(imu.num_readings):
         # Store data
         counters.k_update= data_obj.store_update(counters.k_update, estimator, counters.time_sim);
         counters.reset_time_sum();
-    end
     # ------------------------------------
     
     # ------------- virtual msmt update >> Z vel  -------------  
     if (counters.time_sum_virt_z >= params.dt_virt_z and params.SWITCH_VIRT_UPDATE_Z==1 and params.SWITCH_CALIBRATION==0):
         estimator.vel_update_z(params.R_virt_Z);
         counters.reset_time_sum_virt_z();
-    end
+
     # ---------------------------------------------------------
     
     # ------------- virtual msmt update >> Y vel  -------------
     if (counters.time_sum_virt_y >= params.dt_virt_y and params.SWITCH_VIRT_UPDATE_Y==1 and params.SWITCH_CALIBRATION==0):
          
         # Yaw update
-        if (params.SWITCH_YAW_UPDATE and np.norm(estimator.XX[3:5]) > params.min_vel_yaw):
+        if (params.SWITCH_YAW_UPDATE and np.norm(estimator.XX[3:6]) > params.min_vel_yaw):
             print('yaw update');
-            estimator.yaw_update( imu.msmt[3:5,epoch+2], params); #Osama
+            estimator.yaw_update( imu.msmt[3:6,epoch+1], params); #Osama
         counters.reset_time_sum_virt_y();
     # ---------------------------------------------------------
     
     
     # ------------------- GPS -------------------
     if ((counters.time_sim + params.dt_imu) > counters.time_gps): 
-        
-        if (params.SWITCH_CALIBRATION and params.SWITCH_GPS_UPDATE==1):
+        input(counters.k_gps)
+        if ( (params.SWITCH_CALIBRATION==0) and (params.SWITCH_GPS_UPDATE==1) ):
+            input(estimator.XX)
             # GPS update -- only use GPS vel if it's fast
-            estimator.gps_update( gps.msmt[:,counters.k_gps+1], gps.R[:,counters.k_gps+1], params);
+            estimator.gps_update( gps.msmt[:,counters.k_gps], gps.R[:,counters.k_gps], params);
             
             # This is used to store gps msmt and R recieved at lidar epoch for FG
             gps.IS_GPS_AVAILABLE= 1;
-            current_gps_msmt= gps.msmt[:,counters.k_gps+1];
-            current_gps_R= gps.R[:,counters.k_gps+1];
-            
+            current_gps_msmt= gps.msmt[:,counters.k_gps];
+            current_gps_R= gps.R[:,counters.k_gps];
+            input(estimator.XX)
             # Yaw update
-            if (params.SWITCH_YAW_UPDATE and np.norm(estimator.XX[3:7]) > params.min_vel_yaw):
+            if (params.SWITCH_YAW_UPDATE and np.linalg.norm(estimator.XX[3:6]) > params.min_vel_yaw):
                 print('yaw update');
-                estimator.yaw_update( imu.msmt[3:5,epoch+2], params ); #Osama
-            estimator.linearize_discretize( imu.msmt[:,epoch+2], params.dt_imu, params); #Osama
+                estimator.yaw_update( imu.msmt[3:6,epoch+1], params ); #Osama
+            estimator.linearize_discretize( imu.msmt[:,epoch+1], params.dt_imu, params); #Osama
             
             # Store data
             counters.k_update= data_obj.store_update( counters.k_update, estimator, counters.time_sim );
-        end
-        
+            input(estimator.XX)
         # Time GPS counter
         if (counters.k_gps == gps.num_readings):
             params.turn_off_gps();
         else:
             counters.increase_gps_counter();
-            counters.time_gps= gps.time(counters.k_gps);
-        end
-    end
+            counters.time_gps= gps.time[counters.k_gps];
+
     # ----------------------------------------
     
     # ------------- LIDAR -------------
@@ -122,26 +120,26 @@ for epoch in range(imu.num_readings):
         
         if (epoch > params.num_epochs_static):
             # Read the lidar features
-            epochLIDAR= lidar.time(counters.k_lidar,1);
+            epochLIDAR= lidar.time[counters.k_lidar,1];
             lidar.get_msmt( epochLIDAR, params );
             
             # Remove people-features for the data set
-            lidar.remove_features_in_areas(estimator.XX[0:10]);
+            lidar.remove_features_in_areas(estimator.XX[0:9]);
             
             # NN data association
-            estimator.nearest_neighbor(lidar.msmt[:,0:3], params);
+            estimator.nearest_neighbor(lidar.msmt[:,0:2], params);
 
             # Evaluate the probability of mis-associations
             im.prob_of_MA( estimator, params);
 
             # Lidar update
-            estimator.lidar_update(lidar.msmt[:,0:3], params);
+            estimator.lidar_update(lidar.msmt[:,0:2], params);
             
             # Lineariza and discretize
-            estimator.linearize_discretize( imu.msmt[:,epoch+2], params.dt_imu, params); #Osama
+            estimator.linearize_discretize( imu.msmt[:,epoch+1], params.dt_imu, params); #Osama
             
             # Store the required data for Factor Graph
-            z= lidar.msmt[:,0:1];
+            z= lidar.msmt[:,0:2];
             z[estimator.association == 0, :]= [];
             FG.lidar[counters.k_lidar]= z;
             FG.associations[counters.k_lidar]= estimator.association_no_zeros;
@@ -166,19 +164,15 @@ for epoch in range(imu.num_readings):
             
             # Index of last static lidar epoch(it will be obatined during the run)
             lidar.index_of_last_static_lidar_epoch= counters.k_lidar;
-            
-        end
+
         
         # Time lidar counter
         if (counters.k_lidar == lidar.num_readings):
             params.turn_off_lidar; 
         else:
             counters.increase_lidar_counter();
-            counters.time_lidar= lidar.time(counters.k_lidar,2);
-        end
+            counters.time_lidar= lidar.time[counters.k_lidar,1];
 
-    end
-end
 # ------------------------- END LOOP -------------------------
 # ------------------------------------------------------------
 

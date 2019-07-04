@@ -1,6 +1,14 @@
-import math
-import numpy as np
 import scipy.io as sio
+import numpy as np
+from scipy.linalg import expm
+import sys
+sys.path.insert(0,'../functions/')
+import pi_to_pi
+import FG_fn
+import R_NB_rot
+import Q_BE_fn
+import body2nav_3D
+import math
 
 class EstimatorClassEkfExp:
       landmark_map = None
@@ -8,7 +16,7 @@ class EstimatorClassEkfExp:
       XX= np.zeros((15,1))
       x_true= np.zeros((3,1))
       alpha = None # state of interest extraction vector
-      PX= np.zeros(15)
+      PX= np.zeros((15,15))
         
         
       association = None # association of current features
@@ -36,22 +44,24 @@ class EstimatorClassEkfExp:
       q_d= 0 # detector for the window of time
         
       initial_attitude = None # save initial attitude for the calibration of IM?U biases
-      appearances= np.zeros((1,300)); # if there are more than 300 landmarks, something's wrong
+      appearances= np.zeros(300) # if there are more than 300 landmarks, something's wrong
       FoV_landmarks_at_k = None # landmarks in the field of view
       # ----------------------------------------------
       # ----------------------------------------------
       def __init__(self,imu_calibration_msmts, params):
+
           # Initial attitude
           self.initialize_pitch_and_roll(imu_calibration_msmts)
+
           # initialize the yaw angle
-          self.XX[params.ind_yaw-1]= np.deg2rad(params.initial_yaw_angle);
+          self.XX[params.ind_yaw]= np.deg2rad(params.initial_yaw_angle);
 
           # save initial attitude for calibration
           self.initial_attitude= self.XX[6:9];
 
           # initialize covariance
-          self.PX[9:12,9:12]= np.diag( [params.sig_ba,params.sig_ba,params.sig_ba] )**2;
-          self.PX[12:15,12:15]= np.diag( [params.sig_bw,params.sig_bw,params.sig_bw] )**2;
+          self.PX[9:12,9:12]= np.diag( np.array([params.sig_ba,params.sig_ba,params.sig_ba]) )**2;
+          self.PX[12:15,12:15]= np.diag( np.array([params.sig_bw,params.sig_bw,params.sig_bw]) )**2;
             
           # load map if exists
           tdir = params.path+'landmark_map.mat'
@@ -217,7 +227,7 @@ class EstimatorClassEkfExp:
       # ----------------------------------------------
      #* # ----------------------------------------------
 
-       def nearest_neighbor(self, z, params):
+      def nearest_neighbor(self, z, params):
 
           n_F= z.shape[0];
           n_L= int((self.XX.shape[0] - 15) / 2);
@@ -356,7 +366,7 @@ class EstimatorClassEkfExp:
 
           # Update
           self.Y_k= np.dot(np.dot(self.H_k,self.PX),np.transpose(self.H_k)) + R;
-          self.L_k=  np.dot(np.dot（self.PX，np.transpose(self.H_k)),np.inv(self.Y_k));
+          self.L_k=  np.dot( np.dot( self.PX, np.trans0pose(self.H_k) ), np.inv(self.Y_k) );
           zVector= np.transpose(z);
           zVector= np.reshape(zVector,(zVector.shape[0]*zVector.shape[0],1))
           self.gamma_k= zVector - zHat;

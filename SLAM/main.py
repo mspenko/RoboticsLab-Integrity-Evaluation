@@ -29,13 +29,13 @@ LIDAR_Index_exceeded = 0; # TODO: osama is this needeed?
 estimator.linearize_discretize( imu.msmt[:,0], params.dt_imu, params );
 # ----------------------------------------------------------
 # -------------------------- LOOP --------------------------
-for epoch in range(imu.num_readings-1):
+for epoch in range(imu.num_readings):
     print('Epoch -> ',epoch)
 
     # set the simulation time to the IMU time
     counters.time_sim= imu.time[epoch];
     # Turn off GPS updates if start moving
-    if (epoch == params.num_epochs_static-1):
+    if (epoch == params.num_epochs_static):
         params.turn_off_calibration();
         estimator.PX[6,6]= params.sig_phi0**2;
         estimator.PX[7,7]= params.sig_phi0**2;

@@ -75,7 +75,7 @@ class EstimatorClassSlam:
           # Initial attitude
           self.initialize_pitch_and_roll(imu_calibration_msmts)
           # initialize the yaw angle
-          self.XX[params.ind_yaw-1]= np.deg2rad(params.initial_yaw_angle)
+          self.XX[params.ind_yaw]= np.deg2rad(params.initial_yaw_angle)
 
           # save initial attitude for calibration
           self.initial_attitude= self.XX[6:9]

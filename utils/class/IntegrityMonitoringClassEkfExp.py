@@ -8,7 +8,7 @@ from scipy.sparse.linalg import eigs
 from scipy.stats import ncx2
 
 
-class IntegrityMonitoringCLassEkfExp:
+class IntegrityMonitoringClassEkfExp:
     m = 3
     calculate_A_M_recursively = 0
     C_req = None
@@ -110,7 +110,7 @@ class IntegrityMonitoringCLassEkfExp:
         self.Phi_ph = [None]*(params.M + 1)  # np.cell( 1, params.M + 1 ); # need an extra epoch here
         self.H_ph = [None]*(params.M)  # np.cell( 1, params.M );
         self.gamma_ph = [None]*(params.M)  # np.cell(1, params.M);
-        self.q_ph = np.ones(params.M, 1) * (-1)
+        self.q_ph = np.ones((params.M, 1)) * (-1)
         self.L_ph = [None]*(params.M)  # np.cell(1, params.M);
         self.Lpp_ph = [None]*(params.M + 1)  # np.cell(1, params.M + 1); # need an extra epoch here (osama)
         self.Y_ph = [None]*(params.M)  # np.cell(1, params.M);
@@ -425,7 +425,8 @@ class IntegrityMonitoringCLassEkfExp:
           cpsi= math.cos(estimator.XX[params.ind_yaw]);
           h_t= np.zeros((2,1));
           h_l= np.zeros((2,1));
-          estimator.association_no_zeros= estimator.association( estimator.association != 0);
+          
+          estimator.association_no_zeros= estimator.association[ estimator.association != 0];
           self.P_MA_k= np.ones(estimator.association_no_zeros.shape[0]) * (-1);
           self.P_MA_k_full= self.P_MA_k;
 
