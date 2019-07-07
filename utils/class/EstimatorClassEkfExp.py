@@ -315,103 +315,68 @@ class EstimatorClassEkfExp:
       # ----------------------------------------------
       # ----------------------------------------------
       # ----------------------------------------------
-      def lidar_update(self,z,association,params):
+      def lidar_update(self,z,params):
 
           
-          R= params.R_lidar;
-          self.XX[8]= pi_to_pi.pi_to_pi( self.XX[8] );
+          self.XX[params.ind_yaw-1]= pi_to_pi.pi_to_pi( self.XX[params.ind_yaw-1] ); 
 
-          if np.all(association == -1):
-             return 0
+
+          if np.all(self.association == 0):
+              self.n_k= 0;
+              self.Y_k= None
+              self.L_k= None
+              self.gamma_k= None
+              self.q_k= 0;
+              self.H_k= None
+              self.number_of_associated_LMs= 0;
+              return;
+end
 
           # Eliminate the non-associated features
-          ind_to_eliminate= association == -1 or association == 0;
+          acc = 0
+          tmp = []
+          for i in z:
+              if(i == 0):
+                tmp.append(acc)
+              acc = acc+1
+          z = np.delete(a,tmp,axis = 0)
 
-          tmp_list = []
-          check= np.shape(ind_to_eliminate)
-          notScalar= len(check)
-          if (notScalar == 0):
-            if (ind_to_eliminate == 1):
-               z=[]
-               return 0
-          else:
-            for i in range(ind_to_eliminate.shape[0]):
-                if (ind_to_eliminate[i] == 1):
-                   tmp_list.append(i)
-            z = np.delete(z,tmp_list,axis = 0)
+          # number of associated features
+          self.n_k= self.association_no_zeros.shape[0] * params.m_F;
 
-          #z= np.delete(z,(ind_to_eliminate,:))
-          association = np.delete(association,(ind_to_eliminate))
 
-        #*  # Eliminate features associated to landmarks that has appeared less than X times
-          ind_to_eliminate = []
-          for i in range(association.shape[0]):
-              if (self.appearances[int(association[i])] <= params.min_appearances):
-                 ind_to_eliminate.append(1)
-              else:
-                 ind_to_eliminate.append(0)
-          
-          ind_to_eliminate= np.array(ind_to_eliminate)
-
-          tmp_list = []
-          check= np.shape(ind_to_eliminate)
-          notScalar= len(check)
-          if (notScalar == 0):
-            if (ind_to_eliminate == 1):
-               z=[]
-               association = []
-               return 0
-          else:
-            for i in range(ind_to_eliminate.shape[0]):
-                if (ind_to_eliminate[i] == 1):
-                   tmp_list.append(i)
-            z = np.delete(z,tmp_list,axis = 0)
-            association = np.delete(association,tmp_list)
-          
-
-          # if no measurent can be associated --> return
-          if isempty(z):
-              return 0
-
-          lenz= association.shape[0];
-          lenx= self.XX.shape[0];
-
-          R= np.kron( R,np.eye(lenz) );
-          H= np.zeros((2*lenz,lenx));
 
           #Build Jacobian H
-          spsi= math.sin(self.XX(9));
-          cpsi= math.cos(self.XX(9));
-          zHat= np.zeros((2*lenz,1));
-          for i in range(association.shape[0]):
+          R= np.kron( params.R_lidar, np.eye( self.n_k / params.m_F ) );
+          self.H_k= np.zeros((self.n_k, length(self.XX)));
+          spsi= math.sin(self.XX[params.ind_yaw-1]);
+          cpsi= math.cos(self.XX[params.ind_yaw-1]);
+          zHat= np.zeros((self.n_k,1));
+          for i in range(1,self.association_no_zeros.shape[0]-1)
               # Indexes
-              indz= 2*i + [-1,0];
-              indx= 15 + 2*association[i] + [-1,0];
+              indz= np.array([2*i,a*i]) + np.array([-1,0]);
     
-              dx= self.XX[indx[0]] - self.XX[0];
-              dy= self.XX[indx[1]] - self.XX[1];
+              dx= self.landmark_map(self.association_no_zeros[i-1], 0) - self.XX[0];
+              dy= self.landmark_map(self.association_no_zeros[i-1], 1) - self.XX[1];
     
               # Predicted measurement
-              zHat[indz]= np.array([[dx*cpsi + dy*spsi],[-dx*spsi + dy*cpsi]]);
+
+              zHat[indz-1s] = np.concatenate((np.dot(dx,cpsi)+np.dot(dy,spsi),np.dot(-dx,spsi)+np.dot(dy,cpsi)),axis = 1)
     
               # Jacobian -- H
-              H[indz[0],0]= -cpsi
-              H[indz[1],0]= spsi
-              H[indz[0],1]= -spsi
-              H[indz[1],1]= -cpsi
-              H[indz[0],8]= -dx * spsi + dy * cpsi
-              H[indz[1],8]= -dx * cpsi - dy * spsi
-    
+              self.H_k[indz,0]=np.concatenate((-cpsi,spsi),axis = 0) 
+              self.H_k[indz,1]=np.concatenate((-spsi,-cpsi),axis = 1) 
+              self.H_k[indz-1,params.ind_yaw-1]= np.concatenate((np.concatenate((np.dot(-dx,spsi),np.dot(dy,cpsi)),axis = 0),np.concatenate((np.dot(-dx,cpsi),np.dot(dy,spsi)),axis = 0)),axis = 1)
 
           # Update
           self.Y_k= np.dot(np.dot(self.H_k,self.PX),np.transpose(self.H_k)) + R;
-          self.L_k=  np.dot( np.dot( self.PX, np.trans0pose(self.H_k) ), np.inv(self.Y_k) );
-          zVector= np.transpose(z);
-          zVector= np.reshape(zVector,(zVector.shape[0]*zVector.shape[0],1))
+          self.L_k= np.dot(np.dot(self.PX,np.transpose(self.H_k)),np.inv(self.Y_k));
+          zVector= np.transpose(z)
+          zVector= np.reshape(zVector,(zVector.shape[0],zVector.shape[1]));
           self.gamma_k= zVector - zHat;
           self.q_k= np.dot(np.dot(np.transpose(self.gamma_k),np.inv(self.Y_k)),self.gamma_k);
           self.XX= self.XX + np.dot(self.L_k,self.gamma_k);
-          self.PX= self.PX - np.dot(np.dot(self.L_k,self.H_k),self.PX);
+          self.PX= self.PX - np.dot(np.dot(self.L_k ,self.H_k),self.PX);
           self.number_of_associated_LMs= self.association_no_zeros.shape[0];
       # ----------------------------------------------
       # ----------------------------------------------  
