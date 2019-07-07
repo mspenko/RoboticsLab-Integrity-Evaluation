@@ -495,6 +495,7 @@ class EstimatorClassSlam:
                       [spsi, -cpsi, -dx*cpsi - dy*spsi, -spsi, cpsi]]);
                   
                   PX_2d= np.array([[float(self.PX[0,0]), float(self.PX[0,1]), float(self.PX[0,8]), float(self.PX[0,ind[0]]), float(self.PX[0,ind[1]])],[float(self.PX[1,0]), float(self.PX[1,1]), float(self.PX[1,8]), float(self.PX[1,ind[0]]), float(self.PX[1,ind[1]])],[float(self.PX[8,0]), float(self.PX[8,1]), float(self.PX[8,8]), float(self.PX[8,ind[0]]), float(self.PX[8,ind[1]])],[float(self.PX[ind[0],0]), float(self.PX[ind[0],1]), float(self.PX[ind[0],8]), float(self.PX[ind[0],ind[0]]), float(self.PX[ind[0],ind[1]])],[float(self.PX[ind[1],0]), float(self.PX[ind[1],1]), float(self.PX[ind[1],8]), float(self.PX[ind[1],ind[0]]), float(self.PX[ind[1],ind[1]])]])
+
                   Y= np.dot(np.dot(H,PX_2d),np.transpose(H)) + params.R_lidar;
                   y2= np.dot(np.dot(np.transpose(gamma),np.linalg.inv(Y)),gamma);
                   if (y2 < minY):

@@ -68,7 +68,7 @@ class EstimatorClassEkfExp:
           data = sio.loadmat(tdir)
           data = data['landmark_map']
           self.landmark_map= data;
-          self.num_landmarks= self.landmark_map.shape[1]
+          self.num_landmarks= self.landmark_map.shape[0]
       # ----------------------------------------------
       # ----------------------------------------------
       def compute_alpha(self,params):
@@ -224,88 +224,92 @@ class EstimatorClassEkfExp:
           self.XX= self.XX + np.dot(L, innov.transpose())
           self.PX= self.PX - np.dot( np.dot(L, H), self.PX)
       # ----------------------------------------------
-     #* # ----------------------------------------------
+      # ----------------------------------------------
       def nearest_neighbor(self, z, params):
 
           # number of features
-          self.num_of_extracted_features= z.shape[1];
+          self.num_of_extracted_features= z.shape[0];
 
           # initialize with zero, if SLAM --> initialize with (-1)
-          self.association= np.zeros((self.num_of_extracted_features, 1));
+          self.association= np.ones((self.num_of_extracted_features, 1))*-1;
 
           if (self.num_of_extracted_features == 0):
              return 0 
 
           # initialize variables
-          spsi= np.sin(self.XX(8));
-          cpsi= np.cos(self.XX(8));
-          zHat= np.zeros((2,1));
+          spsi= math.sin(self.XX[8]);
+          cpsi= math.cos(self.XX[8]);
+          zHat= np.zeros(2);
 
           # select landmarks in the field of view
-          self.FoV_landmarks_at_k= np.zeros((self.num_of_extracted_features, 1));
-          for i in range (1,self.num_landmarks+1):
+          self.FoV_landmarks_at_k= np.ones(self.num_landmarks)*-1;
+          for i in range(self.num_landmarks):
     
               dx= self.landmark_map[i,0] - self.XX[0];
+
               if (abs(dx) > params.lidarRange):
                   continue
               dy= self.landmark_map[i,1] - self.XX[1];
+
               if (abs(dy) > params.lidarRange):
                   continue  
               if (math.sqrt( dx**2 + dy**2 ) <= params.lidarRange):
-                  self.FoV_landmarks_at_k[i-1]= i;
+                  self.FoV_landmarks_at_k[i]= i;
+
+
           # remove the ones that are zeros
-          acc = 0
-          tmp = []
-          for i in self.FoV_landmarks_at_k:
-              if i == 0:
-                 tmp.append(acc)
-              acc = acc+1
-          self.FoV_landmarks_at_k = np.delete(self.FoV_landmarks_at_k,acc,axis = 0)
+          tmp_list = []
+          check= np.shape(self.FoV_landmarks_at_k)
+          notScalar= len(check)
+          for i in range(self.FoV_landmarks_at_k.shape[0]):
+              if (self.FoV_landmarks_at_k[i] == -1):
+                 tmp_list.append(i)
 
-
+          self.FoV_landmarks_at_k = np.delete(self.FoV_landmarks_at_k,tmp_list,axis = 0)
           # Loop over extracted features
-          for i in range(1,self.num_of_extracted_features):
+          for i in range(self.num_of_extracted_features):
               min_y2= params.T_NN;
     
               # loop through landmarks
-              for l in range(1,self.FoV_landmarks_at_k.shape[0]):
-                  lm_ind= self.FoV_landmarks_at_k[l-1];
+              for l in range(self.FoV_landmarks_at_k.shape[0]):
+                  lm_ind= int( self.FoV_landmarks_at_k[l] );
                   landmark= self.landmark_map[ lm_ind,: ];
         
                   # TODO: I don't think this is needed, it has been checked before
-                  dx= landmark[0] - self.XX[0];
+                  dx= float( landmark[0] - self.XX[0] );
                   if (abs(dx) > params.lidarRange):
                      continue
-                  dy= landmark[1] - self.XX[1];
+                  dy= float( landmark[1] - self.XX[1] );
                   if (abs(dy) > params.lidarRange):
                      continue     
-        
+
                   # build innovation vector
                   zHat[0]=  np.dot(dx,cpsi) + np.dot(dy,spsi)
                   zHat[1]= np.dot(-dx,spsi) + np.dot(dy,cpsi)
-                  gamma= np.transpose(z[i-1,:]) - zHat;
-        
+                  gamma= np.transpose(z[i,:]) - zHat;
+
                   # quick check (10 m in X or Y)
-                  if (abs(gamma(1)) > 10 or abs(gamma(2)) > 10):
+                  if (abs(gamma[0]) > 10 or abs(gamma[1]) > 10):
                       continue
         
                   # Jacobian
-                  H= [-cpsi, -spsi, -dx*spsi + dy*cpsi;
-                       spsi, -cpsi, -dx*cpsi - dy*spsi ];
+                  H= np.array([[-cpsi, -spsi, -dx*spsi + dy*cpsi],[spsi, -cpsi, -dx*cpsi - dy*spsi ]]);
         
                   # covariance matrix
+                  PX_2d= np.array([[float(self.PX[0,0]), float(self.PX[0,1]), float(self.PX[0,8])],[float(self.PX[1,0]), float(self.PX[1,1]), float(self.PX[1,8])],[float(self.PX[8,0]), float(self.PX[8,1]), float(self.PX[8,8])]])
 
-                  Y= np.dot(np.dot(H,P[[1:2,9],[1:2,9]]),np.transpose(H)) + params.R_lidar;
+                  Y= np.dot(np.dot(H,PX_2d),np.transpose(H)) + params.R_lidar;
+
                   # IIN squared
-                  y2= np.dot(np.dot(np.transpose(gamma),np.inv(Y)),gamma)
-        
+                  y2= np.dot(np.dot(np.transpose(gamma),np.linalg.inv(Y)),gamma)
+
                   if (y2 < min_y2):
                       min_y2= y2;
-                      self.association[i-1]= lm_ind;
+                      self.association[i]= lm_ind;
     
               # Increase appearances counter
-              if (self.association[i-1] != 0):  
-                  self.appearances(self.association[i-1])= self.appearances(self.association[i-1]) + 1;        
+              if (self.association[i] != -1):  
+                  self.appearances[int(self.association[i])]= self.appearances[int(self.association[i])]+ 1;        
           self.association_full = self.association;
       # ----------------------------------------------
       # ----------------------------------------------

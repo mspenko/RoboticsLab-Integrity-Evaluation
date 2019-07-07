@@ -130,7 +130,7 @@ for epoch in range(imu.num_readings):
             estimator.nearest_neighbor(lidar.msmt[:,0:2], params);
 
             # Evaluate the probability of mis-associations
-            im.prob_of_MA( estimator, params);
+            #im.prob_of_MA( estimator, params);
 
             # Lidar update
             estimator.lidar_update(lidar.msmt[:,0:2], params);
