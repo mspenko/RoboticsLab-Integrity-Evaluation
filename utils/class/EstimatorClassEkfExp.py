@@ -22,7 +22,7 @@ class EstimatorClassEkfExp:
       association = None # association of current features
       association_full = None # association of current features
       association_true = None # only for simulation
-      association_no_zeros = None # association of associated features
+      association_no_zeros = np.array([]) # association of associated features
       num_landmarks = None # nunber of landmarks in the map
       num_associated_lms= 0
       num_extracted_features = None
@@ -306,10 +306,11 @@ class EstimatorClassEkfExp:
                   if (y2 < min_y2):
                       min_y2= y2;
                       self.association[i]= lm_ind;
-    
+
               # Increase appearances counter
               if (self.association[i] != -1):  
-                  self.appearances[int(self.association[i])]= self.appearances[int(self.association[i])]+ 1;        
+                  self.appearances[int(self.association[i])]= self.appearances[int(self.association[i])]+ 1;
+
           self.association_full = self.association;
       # ----------------------------------------------
       # ----------------------------------------------
@@ -318,8 +319,7 @@ class EstimatorClassEkfExp:
       def lidar_update(self,z,params):
 
           
-          self.XX[params.ind_yaw-1]= pi_to_pi.pi_to_pi( self.XX[params.ind_yaw-1] ); 
-
+          self.XX[params.ind_yaw]= pi_to_pi.pi_to_pi( self.XX[params.ind_yaw] ); 
 
           if np.all(self.association == 0):
               self.n_k= 0;
@@ -330,51 +330,48 @@ class EstimatorClassEkfExp:
               self.H_k= None
               self.number_of_associated_LMs= 0;
               return;
-end
 
           # Eliminate the non-associated features
-          acc = 0
           tmp = []
-          for i in z:
-              if(i == 0):
-                tmp.append(acc)
-              acc = acc+1
-          z = np.delete(a,tmp,axis = 0)
+          for i in range(self.association.shape[0]):
+              if self.association[i] == -1:
+                tmp.append(i)
+
+          z = np.delete(z,tmp,axis = 0)
 
           # number of associated features
-          self.n_k= self.association_no_zeros.shape[0] * params.m_F;
-
-
+          if self.association_no_zeros.any() == 1:
+             self.n_k= self.association_no_zeros.shape[0] * params.m_F;
+          else:
+             self.n_k= 0
 
           #Build Jacobian H
-          R= np.kron( params.R_lidar, np.eye( self.n_k / params.m_F ) );
-          self.H_k= np.zeros((self.n_k, length(self.XX)));
-          spsi= math.sin(self.XX[params.ind_yaw-1]);
-          cpsi= math.cos(self.XX[params.ind_yaw-1]);
+          R= np.kron( params.R_lidar, np.eye( int(self.n_k / params.m_F) ) );
+          self.H_k= np.zeros((self.n_k, self.XX.shape[0]));
+          spsi= float(math.sin(self.XX[params.ind_yaw]));
+          cpsi= float(math.cos(self.XX[params.ind_yaw]));
           zHat= np.zeros((self.n_k,1));
-          for i in range(1,self.association_no_zeros.shape[0]-1)
+          for i in range(self.association_no_zeros.shape[0]):
               # Indexes
-              indz= np.array([2*i,a*i]) + np.array([-1,0]);
-    
-              dx= self.landmark_map(self.association_no_zeros[i-1], 0) - self.XX[0];
-              dy= self.landmark_map(self.association_no_zeros[i-1], 1) - self.XX[1];
-    
-              # Predicted measurement
+              indz= np.array([2*i,2*i]) + np.array([0,1]);
+              dx= float(self.landmark_map[int(self.association_no_zeros[i]), 0] - self.XX[0]);
+              dy= float(self.landmark_map[int(self.association_no_zeros[i]), 1] - self.XX[1]);
 
-              zHat[indz-1s] = np.concatenate((np.dot(dx,cpsi)+np.dot(dy,spsi),np.dot(-dx,spsi)+np.dot(dy,cpsi)),axis = 1)
+              # Predicted measurement
+              zHat[indz] = np.array([[dx*cpsi+dy*spsi],[-dx*spsi+dy*cpsi]])
     
               # Jacobian -- H
-              self.H_k[indz,0]=np.concatenate((-cpsi,spsi),axis = 0) 
-              self.H_k[indz,1]=np.concatenate((-spsi,-cpsi),axis = 1) 
-              self.H_k[indz-1,params.ind_yaw-1]= np.concatenate((np.concatenate((np.dot(-dx,spsi),np.dot(dy,cpsi)),axis = 0),np.concatenate((np.dot(-dx,cpsi),np.dot(dy,spsi)),axis = 0)),axis = 1)
+              self.H_k[indz,0]=np.array([-cpsi,spsi]) 
+              self.H_k[indz,1]=np.array([-spsi,-cpsi]) 
+              self.H_k[indz,params.ind_yaw]=  np.array([-dx*spsi+dy*cpsi,-dx*cpsi-dy*spsi])
+
 
           # Update
           self.Y_k= np.dot(np.dot(self.H_k,self.PX),np.transpose(self.H_k)) + R;
-          self.L_k= np.dot(np.dot(self.PX,np.transpose(self.H_k)),np.inv(self.Y_k));
-          zVector= np.transpose(z)
-          zVector= np.reshape(zVector,(zVector.shape[0],zVector.shape[1]));
+          self.L_k= np.dot(np.dot(self.PX,np.transpose(self.H_k)),np.linalg.inv(self.Y_k));
+          zVector= np.reshape(z,(zHat.shape[0],zHat.shape[1]));
           self.gamma_k= zVector - zHat;
-          self.q_k= np.dot(np.dot(np.transpose(self.gamma_k),np.inv(self.Y_k)),self.gamma_k);
+          self.q_k= np.dot(np.dot(np.transpose(self.gamma_k),np.linalg.inv(self.Y_k)),self.gamma_k);
           self.XX= self.XX + np.dot(self.L_k,self.gamma_k);
           self.PX= self.PX - np.dot(np.dot(self.L_k ,self.H_k),self.PX);
           self.number_of_associated_LMs= self.association_no_zeros.shape[0];

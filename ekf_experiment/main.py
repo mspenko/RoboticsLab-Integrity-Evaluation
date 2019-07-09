@@ -130,7 +130,7 @@ for epoch in range(imu.num_readings):
             estimator.nearest_neighbor(lidar.msmt[:,0:2], params);
 
             # Evaluate the probability of mis-associations
-            #im.prob_of_MA( estimator, params);
+            im.prob_of_MA( estimator, params);
 
             # Lidar update
             estimator.lidar_update(lidar.msmt[:,0:2], params);
@@ -140,7 +140,13 @@ for epoch in range(imu.num_readings):
             
             # Store the required data for Factor Graph
             z= lidar.msmt[:,0:2];
-            z[estimator.association == 0, :]= [];
+
+            tmp_list = []
+            for i in range(estimator.association.shape[0]):
+                if (estimator.association[i] == -1):
+                   tmp_list.append(i)
+            z = np.delete(z, tmp_list, axis = 0)
+
             FG.lidar[counters.k_lidar]= z;
             FG.associations[counters.k_lidar]= estimator.association_no_zeros;
             FG.imu[counters.k_lidar]= imu.msmt[:,epoch];
@@ -154,11 +160,11 @@ for epoch in range(imu.num_readings):
             im.monitor_integrity(estimator, counters, data_obj, params);
             
             # Store data
-            data_obj.store_msmts( body2nav_3D(lidar.msmt, estimator.XX[0:10]) );# Add current msmts in Nav-frame
+            data_obj.store_msmts( body2nav_3D.body2nav_3D(lidar.msmt, estimator.XX[0:9]) );# Add current msmts in Nav-frame
             counters.k_update= data_obj.store_update(counters.k_update, estimator, counters.time_sim);
-  
             # increase integrity counter
             counters.increase_integrity_monitoring_counter();
+            
             
         else:
             

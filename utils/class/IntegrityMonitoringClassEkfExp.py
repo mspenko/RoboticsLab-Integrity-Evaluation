@@ -5,7 +5,7 @@ from scipy.stats.distributions import chi2
 from scipy.optimize import minimize
 from scipy.special import comb
 from scipy.sparse.linalg import eigs
-from scipy.stats import ncx2
+from scipy.stats import chi2
 
 
 class IntegrityMonitoringClassEkfExp:
@@ -15,7 +15,7 @@ class IntegrityMonitoringClassEkfExp:
     p_hmi = None
     detector_threshold = None
     is_extra_epoch_needed = -1  # initialize as (-1), then a boolean
-    ind_im = np.array([1, 2, 9])
+    ind_im = np.array([0, 1, 8])
 
     # (maybe unnecessary)
     E = None
@@ -48,23 +48,23 @@ class IntegrityMonitoringClassEkfExp:
     Phi_M = None
     q_M = None
     gamma_M = None
-    Y_M = None
-    A_M = None
+    Y_M = []
+    A_M = np.array([])
     M_M = None
     P_MA_M = None
     P_F_M = None
 
     # preceding horizon saved (ph)
-    Phi_ph = None
-    q_ph = None
-    gamma_ph = None
+    Phi_ph = []
+    q_ph = []
+    gamma_ph = []
     A_ph = None
-    L_ph = None
-    Lpp_ph = None
-    H_ph = None
-    Y_ph = None
-    P_MA_ph = None
-    n_ph = None
+    L_ph = []
+    Lpp_ph = []
+    H_ph = []
+    Y_ph = []
+    P_MA_ph = []
+    n_ph = []
     n_F_ph = None  # number of features associated in the preceding horizon
 
     # Factor Graph variables
@@ -106,20 +106,20 @@ class IntegrityMonitoringClassEkfExp:
         self.C_req = params.continuity_requirement
 
         # initialize the preceding horizon
-        self.n_ph = np.zeros((params.M, 1))
-        self.Phi_ph = [None]*(params.M + 1)  # np.cell( 1, params.M + 1 ); # need an extra epoch here
-        self.H_ph = [None]*(params.M)  # np.cell( 1, params.M );
-        self.gamma_ph = [None]*(params.M)  # np.cell(1, params.M);
-        self.q_ph = np.ones((params.M, 1)) * (-1)
-        self.L_ph = [None]*(params.M)  # np.cell(1, params.M);
-        self.Lpp_ph = [None]*(params.M + 1)  # np.cell(1, params.M + 1); # need an extra epoch here (osama)
-        self.Y_ph = [None]*(params.M)  # np.cell(1, params.M);
-        self.P_MA_ph = [None]*(params.M)  # np.cell(1, params.M);
+        #self.n_ph = np.zeros((params.M, 1))
+        #self.Phi_ph = [None]*(params.M + 1)  # np.cell( 1, params.M + 1 ); # need an extra epoch here
+        #self.H_ph = [None]*(params.M)  # np.cell( 1, params.M );
+        #self.gamma_ph = [None]*(params.M)  # np.cell(1, params.M);
+        #self.q_ph = np.ones((params.M, 1)) * (-1)
+        #self.L_ph = [None]*(params.M)  # np.cell(1, params.M);
+        #self.Lpp_ph = [None]*(params.M + 1)  # np.cell(1, params.M + 1); # need an extra epoch here (osama)
+        #self.Y_ph = [None]*(params.M)  # np.cell(1, params.M);
+        #self.P_MA_ph = [None]*(params.M)  # np.cell(1, params.M);
         # --------------------------------------------------------------------------
         # --------------------------------------------------------------------------
 
     def optimization_fn(self, f_M_mag, fx_hat_dir, M_dir, sigma_hat, l, dof):
-        neg_p_hmi = - ( (1 - norm.cdf(l , f_M_mag * fx_hat_dir, sigma_hat) + norm.cdf(-l , f_M_mag * fx_hat_dir, sigma_hat)) * ncx2(self.T_d, dof, f_M_mag**2 * M_dir ) )
+        neg_p_hmi = - ( (1 - norm.cdf(l , f_M_mag * fx_hat_dir, sigma_hat) + norm.cdf(-l , f_M_mag * fx_hat_dir, sigma_hat)) * chi2(self.T_d, dof, f_M_mag**2 * M_dir ) )
         return neg_p_hmi
     # --------------------------------------------------------------------------
     # --------------------------------------------------------------------------
@@ -137,55 +137,66 @@ class IntegrityMonitoringClassEkfExp:
 
         # keep only the elements for the [x-y-theta]
         # the state evolution matrix from one lidar msmt to the next one
-        self.Phi_k = estimator.Phi_k**12  ######## CAREFUL
-        self.Phi_k = self.Phi_k[params.ind_pose, params.ind_pose]
+        self.Phi_k = estimator.Phi_k  ######## CAREFUL
+        for i in range(11):
+           self.Phi_k= np.dot(self.Phi_k, estimator.Phi_k)
+        
+        Phi_k_2d= np.array([[float(self.Phi_k[0,0]), float(self.Phi_k[0,1]), float(self.Phi_k[0,8])],[float(self.Phi_k[1,0]), float(self.Phi_k[1,1]), float(self.Phi_k[1,8])],[float(self.Phi_k[8,0]), float(self.Phi_k[8,1]), float(self.Phi_k[8,8])]])
+
+        self.Phi_k = Phi_k_2d
 
         # build L and H for the current time using only the pose indexes
         if (estimator.n_k == 0):  # no landmarks in the FoV at epoch k
-            self.H_k = None
-            self.L_k = None
+            self.H_k = []
+            self.L_k = []
         else:  # extract the indexes from the pose
             self.H_k = estimator.H_k[:, params.ind_pose]
             self.L_k = estimator.L_k[params.ind_pose, :]
 
         # current horizon measurements
-        self.n_M = np.sum(self.n_ph) + estimator.n_k
-        self.n_L_M = np.dot(self.n_M, np.inv(params.m_F))
+        self.n_M= estimator.n_k
+        for i in self.n_ph:
+            self.n_M = self.n_M + int(i)
+        self.n_L_M = int( self.n_M/params.m_F )
 
         # the first time we have enough preceding horizon
-        if (self.is_extra_epoch_needed == -1 and self.n_L_M >= params.min_n_L_M and counters.k_im > 2):
+        if (self.is_extra_epoch_needed == -1 and self.n_L_M >= params.min_n_L_M and counters.k_im > 1):
             self.is_extra_epoch_needed = 1
         # monitor integrity if the number of LMs in the preceding horizon is more than threshold
-        if((params.SWITCH_FIXED_LM_SIZE_PH and self.n_L_M >= params.min_n_L_M and self.is_extra_epoch_needed == False ) or( params.SWITCH_FIXED_LM_SIZE_PH==0 and counters.k_im > self.M + 2 )):
+        if(( (params.SWITCH_FIXED_LM_SIZE_PH == 1) and (self.n_L_M >= params.min_n_L_M) and (self.is_extra_epoch_needed == False) ) or( (params.SWITCH_FIXED_LM_SIZE_PH==0) and (counters.k_im > self.M + 2) )):
 
             # Modify preceding horizon to have enough landmarks
             if (params.SWITCH_FIXED_LM_SIZE_PH == 1):
                 self.n_M = estimator.n_k
-                for i in range(self.n_ph.shape[0]):
-                    self.n_M = self.n_M + self.n_ph[i]
+                for i in range(len(self.n_ph)):
+                    self.n_M = self.n_M + int(self.n_ph[i])
                     # if the preceding horizon is long enough --> stop
                     if (self.n_M >= params.min_n_L_M * params.m_F):
                         break
                 # set the variables
-                self.n_L_M = np.dot(self.n_M, np.inv(params.m_F))
-                self.M = i
+                self.n_L_M = int(self.n_M/params.m_F)
+                self.M = i + 1
             # common parameters
-            alpha = np.array([[-math.sin(estimator.XX[params.ind_yaw])],[np.cos(estimator.XX[params.ind_yaw])], [0]]);
-            self.sigma_hat = np.sqrt( np.dot(np.dot(np.transpose(alpha),estimator.PX(params.ind_pose, params.ind_pose)),alpha) );
+            alpha = np.array([[-math.sin(estimator.XX[params.ind_yaw])],[math.cos(estimator.XX[params.ind_yaw])], [0]]);
+
+            PX_2d= np.array([[float(estimator.PX[0,0]), float(estimator.PX[0,1]), float(estimator.PX[0,8])],[float(estimator.PX[1,0]), float(estimator.PX[1,1]), float(estimator.PX[1,8])],[float(estimator.PX[8,0]), float(estimator.PX[8,1]), float(estimator.PX[8,8])]])
+            estimator.PX= PX_2d
+            self.sigma_hat = np.sqrt( np.dot(np.dot(np.transpose(alpha),PX_2d),alpha) );
+
             # detector threshold
-            self.T_d = np.sqrt( chi2.ppf( 1 - params.continuity_requirement , self.n_M ) );
+            self.T_d = np.sqrt( chi2.ppf( 1 - float(params.continuity_requirement) , self.n_M ) );
 
             # If there are no landmarks in the FoV at k
             if (estimator.n_k == 0):
-                self.Lpp_k = self.Phi_ph[1];
+                self.Lpp_k = self.Phi_ph[0];
             else:
-                self.Lpp_k = self.Phi_ph[1] - np.dot(np.dot(self.L_k, self.H_k), self.Phi_ph[0]);
+                self.Lpp_k = self.Phi_ph[0] - np.dot(np.dot(self.L_k, self.H_k), self.Phi_ph[0]);
             # accounting for the case where there are no landmarks in the FoV at
             # epoch k and the whole preceding horizon
             if (self.n_M == 0):
-                self.Y_M = None
-                self.A_M = None
-                self.B_bar = None
+                self.Y_M = []
+                self.A_M = []
+                self.B_bar = []
                 self.q_M = 0
                 self.detector_threshold = 0
                 self.p_hmi = 1
@@ -270,7 +281,7 @@ class IntegrityMonitoringClassEkfExp:
             # store integrity related data
             data.store_integrity_data(self, estimator, counters, params)
         # hey
-        elif (counters.k_im > 1):  # if it's the first time --> cannot compute Lpp_k
+        elif (counters.k_im > 0):  # if it's the first time --> cannot compute Lpp_k
             if (estimator.n_k == 0):
                 self.Lpp_k = self.Phi_ph[0]
             else:
@@ -290,7 +301,7 @@ class IntegrityMonitoringClassEkfExp:
         data.im.time[counters.k_im] = counters.time_sim
 
         # update the preceding horizon
-        self.update_preceding_horizon(self, estimator, params)
+        self.update_preceding_horizon(estimator, params)
 
     def compute_A_M_matrix(self, estimator):
         # build matrix A_M in the first time
@@ -381,13 +392,18 @@ class IntegrityMonitoringClassEkfExp:
 
     def compute_Y_M_matrix(self, estimator):
         # if it's the first epoch --> build the Y_M
-        if self.Y_M.size == 0:
+        if len(self.Y_M) == 0:
             self.Y_M = np.zeros( (self.n_M, self.n_M) );
-            self.Y_M[ 1:estimator.n_k, 1:estimator.n_k ]= estimator.Y_k;
+
+            self.Y_M[ 0:estimator.n_k, 0:estimator.n_k ]= estimator.Y_k;
+
             for i in range(self.M):
-                n_start = estimator.n_k + np.sum( self.n_ph[1:i-1] ) + 1;
-                n_end = estimator.n_k + np.sum( self.n_ph[1:i] );
-                self.Y_M[ n_start: self.Y_M[self.Y_M.shape[0]] , n_start:self.Y_M[self.Y_M.shape[0]] ]= self.Y_ph[i];
+                n_start = estimator.n_k
+                n_end = estimator.n_k + self.n_ph[i-1]
+                for j in range (i-1):
+                    n_start = n_start + self.n_ph[j];
+                    n_end = n_end + self.n_ph[j];
+                self.Y_M[ n_start: n_end, n_start: n_end ]= self.Y_ph[i];
         else:  # update Y_M
             self.Y_M = np.concatenate((np.concatenate((estimator.Y_k, np.zeros((estimator.n_k,np.sum(self.n_ph[1:self.M])))),axis = 1),np.concatenate((np.zeros((np.sum(self.n_ph[1:self.M]),estimator.n_k)), self.Y_M[1:np.sum(self.n_ph[1:self.M]), 1:np.sum(self.n_ph[1:self.M])]),axis =1)),axis = 0)
 
@@ -395,50 +411,100 @@ class IntegrityMonitoringClassEkfExp:
 
             # TODO: organize
                 if (params.SWITCH_FIXED_LM_SIZE_PH == 1):
-                    self.n_ph=     np.concatenate((estimator.n_k,self.n_ph[1:self.M]),axis = 0);
-                    self.gamma_ph= np.concatenate((estimator.gamma_k,self.gamma_ph[1:self.M]),axis = 0);
-                    self.q_ph=     np.concatenate((estimator.q_k,self.q_ph[1:self.M]),axis = 0);
-                    self.Phi_ph=   np.concatenate((self.Phi_k, self.Phi_ph[1:self.M+ 1]),axis = 1); ######## CAREFUL
-                    self.H_ph=     np.concatenate((self.H_k,self.H_ph[1:self.M]),axis = 1);
-                    self.L_ph=     np.concatenate((self.L_k,self.L_ph[1:self.M]),axis = 1);
-                    self.Lpp_ph=   np.concatenate((self.Lpp_k,self.Lpp_ph[1:self.M]),axis = 1);
-                    self.Y_ph=     np.concatenate((estimator.Y_k,self.Y_ph[1:self.M]),axis = 1);
-                    self.P_MA_ph=  np.concatenate((self.P_MA_k,self.P_MA_ph[1:self.M]),axis = 1);
+
+                    self.n_ph.insert(0,estimator.n_k)
+                    while len(self.n_ph) > self.M + 1:
+                        self.n_ph.pop(len(self.n_ph)-1)
+
+                    self.gamma_ph.insert(0,estimator.gamma_k)
+                    while len(self.gamma_ph) > self.M + 1:
+                        self.gamma_ph.pop(len(self.gamma_ph)-1)
+
+                    self.q_ph.insert(0,estimator.q_k)
+                    while len(self.q_ph) > self.M + 1:
+                        self.q_ph.pop(len(self.q_ph)-1)
+
+                    self.Phi_ph.insert(0,self.Phi_k)
+                    while len(self.Phi_ph) > self.M + 2:
+                        self.Phi_ph.pop(len(self.Phi_ph)-1)
+
+                    self.H_ph.insert(0,self.H_k)
+                    while len(self.H_ph) > self.M + 1:
+                        self.H_ph.pop(len(self.H_ph)-1)
+
+                    self.L_ph.insert(0,self.L_k)
+                    while len(self.L_ph) > self.M + 1:
+                        self.L_ph.pop(len(self.L_ph)-1)
+
+                    self.Lpp_ph.insert(0,self.Lpp_k)
+                    while len(self.Lpp_ph) > self.M + 1:
+                        self.Lpp_ph.pop(len(self.Lpp_ph)-1)
+
+                    self.Y_ph.insert(0,estimator.Y_k)
+                    while len(self.Y_ph) > self.M + 1:
+                        self.Y_ph.pop(len(self.Y_ph)-1)
+
+                    self.P_MA_ph.insert(0,self.P_MA_k)
+                    while len(self.P_MA_ph) > self.M + 1:
+                        self.P_MA_ph.pop(len(self.P_MA_ph)-1)
 
                 else:
-                    self.n_ph=     np.concatenate((estimator.n_k,self.n_ph[1:self.n_ph[self.n_ph.shape[0]]-1]),axis = 0);
-                    self.gamma_ph= np.concatenate((estimator.gamma_k, self.gamma_ph[1:self.gamma_ph[self.gamma_ph.shape[0]]-1]),axis = 1);
-                    self.q_ph=     np.concatenate((estimator.q_k,self.q_ph[1:self.q_ph[self.q_ph.shape[0]]]-1),axis = 0);
-                    self.Phi_ph=   np.concatenate((self.Phi_k,self.Phi_ph[1:self.Phi_ph[self.Phi_ph.shape[0]]-1]),axis = 0); ######## CAREFUL
-                    self.H_ph=     np.concatenate((self.H_k,self.H_ph[1:self.H_ph[self.H_ph.shape[0]]-1]),axis = 0);
-                    self.L_ph=     np.concatenate((self.L_k,self.L_ph[1:self.L_ph[self.L_ph.shape[0]]-1]),axis = 0);
-                    self.Lpp_ph=   np.concatenate((self.Lpp_k,self.Lpp_ph[1:self.Lpp_ph[self.Lpp_ph.shape[0]]-1]),axis  = 0);
-                    self.Y_ph=     np.concatenate((estimator.Y_k,self.Y_ph[1:self.Y_ph[self.Y_ph.shape[0]]-1]),axis =0);
-                    self.P_MA_ph=  np.concatenate((self.P_MA_k,self.P_MA_ph[1:self.P_MA_p[self.P_MA_p.shape[0]]-1]),axis = 0);
 
+                    self.n_ph.insert(0,estimator.n_k)
+
+                    self.gamma_ph.insert(0,estimator.gamma_k)
+
+                    self.q_ph.insert(0,estimator.q_k)
+
+                    self.Phi_ph.insert(0,self.Phi_k)
+
+                    self.H_ph.insert(0,self.H_k)
+
+                    self.L_ph.insert(0,self.L_k)
+
+                    self.Lpp_ph.insert(0,self.Lpp_k)
+
+                    self.Y_ph.insert(0,estimator.Y_k)
+
+                    self.P_MA_ph.insert(0,self.P_MA_k)
+                #input(self.M)
+                #print(self.n_ph)
+                #print(self.gamma_ph)
+                #print(self.q_ph)
+                #print(self.Phi_ph)
+                #print(self.H_ph)
+                #print(self.L_ph)
+                #print(self.Lpp_ph)
+                #print(self.Y_ph)
+                #input(self.P_MA_ph)
     def prob_of_MA(self, estimator, params):
           # dof of the non-central chi-square in the P(MA)
           chi_dof= self.m + params.m_F;
-
           # allocate memory
-          spsi= math.sin(estimator.XX[params.ind_yaw]);
-          cpsi= math.cos(estimator.XX[params.ind_yaw]);
+          spsi= float( math.sin(estimator.XX[params.ind_yaw]) );
+          cpsi= float( math.cos(estimator.XX[params.ind_yaw]) );
           h_t= np.zeros((2,1));
           h_l= np.zeros((2,1));
           
-          estimator.association_no_zeros= estimator.association[ estimator.association != 0];
+          tmp = []
+          for i in range(estimator.association.shape[0]):
+              if estimator.association[i] == -1:
+                tmp.append(i)
+
+          estimator.association_no_zeros = np.delete(estimator.association,tmp,axis = 0)
+
           self.P_MA_k= np.ones(estimator.association_no_zeros.shape[0]) * (-1);
           self.P_MA_k_full= self.P_MA_k;
 
           # compute kappa
-          if (self.A_M.shape[0] == 0):
+          if (self.A_M.any() == 0):
              self.mu_k = 0;
           elif (self.n_L_M - self.n_max < 2):
              self.kappa= 1;
              self.mu_k= np.dot(self.kappa,( np.sqrt(self.T_d) - np.sqrt( chi2.ppf(1 - params.I_MA , self.n_M) ) )**2);
           else:
               # compute Q matrix with A_M_(k-1) , Phi_(k-1), P_k, n_M_(k-1)
-              Q= np.dot(np.dot(np.dot(np.dot(np.transpose(self.A_M) * np.tfranspose(self.Phi_ph[1])) * estimator.PX[params.ind_pose, params.ind_pose]) * self.Phi_ph[1]) * self.A_M);
+              Q= np.dot(np.dot(np.dot(np.dot(np.transpose(self.A_M) * np.transpose(self.Phi_ph[0])) * estimator.PX[params.ind_pose, params.ind_pose]) * self.Phi_ph[0]) * self.A_M);
 
               self.kappa= 0;
               C = comb(self.n_L_M[1,:],self.n_max);#set of possible fault indices for n_max simultanous faults
@@ -452,62 +518,61 @@ class IntegrityMonitoringClassEkfExp:
               self.mu_k= np.dot(self.kappa ,( np.sqrt(self.T_d) - np.sqrt( chi2.ppf[1 - params.I_MA , self.n_M] ) )**2);
 
           #loop through each associated landmark
-          for t in range (1,estimator.association_no_zeros.shape[0]):
+          for t in range (estimator.association_no_zeros.shape[0]):
               # take the landmark ID
-              lm_id_t= estimator.association_no_zeros(t);
+              lm_id_t= int( estimator.association_no_zeros[t] );
 
               # initialize the P(MA)
               self.P_MA_k[t]= estimator.FoV_landmarks_at_k.shape[0] - 1;
 
               # build the necessary parameters
-              landmark= estimator.landmark_map[ lm_id_t ,: ];
-              dx= landmark[0] - estimator.XX[0];
-              dy= landmark[1] - estimator.XX[1];
-              h_t[1]=  dx*cpsi + dy*spsi;
-              h_t[2]= -dx*spsi + dy*cpsi;
+              landmark= estimator.landmark_map[ lm_id_t ];
+              dx= float(landmark[0] - estimator.XX[0]);
+              dy= float(landmark[1] - estimator.XX[1]);
+              h_t[0]=  dx*cpsi + dy*spsi;
+              h_t[1]= -dx*spsi + dy*cpsi;
 
               # loop through every possible landmark in the FoV (potential MA)
-              for l in range(1,estimator.FoV_landmarks_at_k.shape[0]):
+              for l in range(estimator.FoV_landmarks_at_k.shape[0]):
                   # take landmark ID
-                  lm_id_l= estimator.FoV_landmarks_at_k[l];
+                  lm_id_l= int( estimator.FoV_landmarks_at_k[l] );
+
                   if (lm_id_t != lm_id_l):
                      # extract the landmark
-                     landmark= estimator.landmark_map[lm_id_l ,: ];
+                     landmark= estimator.landmark_map[lm_id_l ];
 
                      # compute necessary intermediate parameters
-                     dx= landmark[0] - estimator.XX[0];
-                     dy= landmark[1] - estimator.XX[1];
+                     dx= float( landmark[0] - estimator.XX[0] );
+                     dy= float( landmark[1] - estimator.XX[1] );
                      h_l[0]=  dx*cpsi + dy*spsi;
                      h_l[1]= -dx*spsi + dy*cpsi;
                      H_l= np.array([[-cpsi, -spsi, -dx*spsi + dy*cpsi],[spsi, -cpsi, -dx*cpsi - dy*spsi]])
                      y_l_t= h_l - h_t;
-                     Y_l= np.dot(np.dot(H_l,estimator.PX(params.ind_pose, params.ind_pose)),np.transpose(H_l)) + params.R_lidar;
+                     PX_2d= np.array([[float(estimator.PX[0,0]), float(estimator.PX[0,1]), float(estimator.PX[0,8])],[float(estimator.PX[1,0]), float(estimator.PX[1,1]), float(estimator.PX[1,8])],[float(estimator.PX[8,0]), float(estimator.PX[8,1]), float(estimator.PX[8,8])]])
+
+                     Y_l= np.dot(np.dot(H_l,PX_2d),np.transpose(H_l)) + params.R_lidar;
 
                      # individual innovation norm between landmarks l and t
-                     IIN_l_t= np.sqrt( np.dot(np.dot(np.transpose(y_l_t),np.inv(Y_l)),y_l_t) );
+                     IIN_l_t= float( np.sqrt( np.dot(np.dot(np.transpose(y_l_t),np.linalg.inv(Y_l)),y_l_t) ) );
 
                      # if one of the landmarks is too close to ensure P(MA) --> set to one
                      if (IIN_l_t < np.sqrt(params.T_NN)):
                          self.P_MA_k[t]= 1;
                          break
                      else:
-                         self.P_MA_k[t]= self.P_MA_k[t] - ncx2.cdf( ( IIN_l_t - np.sqrt(params.T_NN) )**2 , chi_dof, self.mu_k );
+                         self.P_MA_k[t]= self.P_MA_k[t] - chi2.cdf( ( IIN_l_t - np.sqrt(params.T_NN) )**2 , chi_dof, self.mu_k );
 
-               # store the P_MA for the full LMs
+              # store the P_MA for the full LMs
               self.P_MA_k_full[t]= self.P_MA_k[t];
-
               # landmark selection
               if (params.SWITCH_LM_SELECTION==1):
                   if (self.P_MA_k[t] > params.P_MA_max):
                       self.P_MA_k[t]= -1;
                       estimator.association_no_zeros[t]= -1;
-                      tmp = []
-                      acc = 0
-                      for i in estimator.association:
-                          if(i == lm_id_t):
-                            tmp.append(0)
-                          acc = acc+1
-                      estimator.association[ tmp ]= 0;
+
+                      for i in range(estimator.association.shape[0]):
+                          if estimator.association[i] == lm_id_t:
+                            estimator.association[i] = -1
 
                # not more than probability one
               if (self.P_MA_k[t] > 1):
@@ -515,17 +580,15 @@ class IntegrityMonitoringClassEkfExp:
 
           # remove non-associated ones
           if (params.SWITCH_LM_SELECTION == 1):
-              tmp = []
-              acc = 0
-              for i in self.P_MA_K:
-                  if(i == -1):
-                    tmp.append(acc)
-                  acc = acc+1
-              self.P_MA_k = np.delete(self.P_MA_K,tmp,axis = 0)
-              tmp = []
-              acc = 0
-              for i in estimator.association_no_zeros:
-                  if(i == -1):
-                    tmp.append(acc)
-                  acc = acc+1
-              estimator.association_no_zeros = np.delete(estimator.association_no_zeros,tmp,axis = 0)
+
+              tmp_list = []
+              for i in range(self.P_MA_k.shape[0]):
+                  if (self.P_MA_k[i] == -1):
+                     tmp_list.append(i)
+              self.P_MA_k = np.delete(self.P_MA_k,tmp_list,axis = 0)
+
+              tmp_list = []
+              for i in range(estimator.association_no_zeros.shape[0]):
+                  if (estimator.association_no_zeros[i] == -1):
+                     tmp_list.append(i)
+              estimator.association_no_zeros = np.delete(estimator.association_no_zeros, tmp_list, axis = 0)
