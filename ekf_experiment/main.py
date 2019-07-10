@@ -134,7 +134,7 @@ for epoch in range(imu.num_readings):
 
             # Lidar update
             estimator.lidar_update(lidar.msmt[:,0:2], params);
-            
+
             # Lineariza and discretize
             estimator.linearize_discretize( imu.msmt[:,epoch+1], params.dt_imu, params); #Osama
             

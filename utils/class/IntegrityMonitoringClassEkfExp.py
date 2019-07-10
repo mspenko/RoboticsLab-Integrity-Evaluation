@@ -2,7 +2,8 @@ import numpy as np
 import math
 from scipy.stats import norm
 from scipy.stats.distributions import chi2
-from scipy.optimize import minimize
+from scipy.stats import ncx2
+import scipy.optimize as sciopt
 from scipy.special import comb
 from scipy.sparse.linalg import eigs
 from scipy.stats import chi2
@@ -119,19 +120,23 @@ class IntegrityMonitoringClassEkfExp:
         # --------------------------------------------------------------------------
 
     def optimization_fn(self, f_M_mag, fx_hat_dir, M_dir, sigma_hat, l, dof):
-        neg_p_hmi = - ( (1 - norm.cdf(l , f_M_mag * fx_hat_dir, sigma_hat) + norm.cdf(-l , f_M_mag * fx_hat_dir, sigma_hat)) * chi2(self.T_d, dof, f_M_mag**2 * M_dir ) )
-        return neg_p_hmi
+        #print(self.T_d)
+        #print(dof)
+        #print(float(norm.cdf(l , f_M_mag * fx_hat_dir, sigma_hat)))
+        #input(format(float(chi2.cdf(self.T_d, dof, f_M_mag**2 * M_dir )),'.2g'))
+        neg_p_hmi = - ( (1 - float(norm.cdf(l , f_M_mag * fx_hat_dir, sigma_hat)) + float(norm.cdf(-l , f_M_mag * fx_hat_dir, sigma_hat))) * float(ncx2.cdf(self.T_d, dof, f_M_mag**2 * float(M_dir) )) )
+        return float(neg_p_hmi)
     # --------------------------------------------------------------------------
     # --------------------------------------------------------------------------
     def compute_E_matrix(self, i, m_F):
-        if (sum(i) == 0):  # E matrix for only previous state faults
+        if (np.sum(i) == -1):  # E matrix for only previous state faults
             self.E = np.zeros((self.m, self.n_M + self.m))
-            self.E[:, self.E[self.E.shape[0]]-self.m + 1:self.E[self.E.shape[0]]] = np.eye(self.m)
+            self.E[:, (self.E.shape[1]-self.m):] = np.eye(self.m)
         else:  # E matrix with faults in the PH
-            self.E = np.zeros((self.m + m_F*i.shape[0] , self.n_M + self.m))
-            self.E[self.E[self.E.shape[0]]-self.m+1 :self.E[self.E.shape[0]] , -self.m:self.E[self.E.shape[0]] ]= np.eye(self.m) # previous bias
+            self.E = np.zeros((self.m + m_F*(i.shape[0]) , self.n_M + self.m))
+            self.E[(self.E.shape[0]-self.m): , (self.E.shape[1]-self.m):]= np.eye(self.m) # previous bias
             for j in range(i.shape[0]):
-                self.E[m_F*[j-1]+1 : m_F*j , (i[j]-1)*m_F + 1 : i[j]*m_F ]= np.eye(m_F); # landmark i(j) faulted
+                self.E[m_F*j : m_F*(j+1) , (int(i[j]))*m_F : (int(i[j])+1)*m_F ]= np.eye(m_F); # landmark i(j) faulted
 
     def monitor_integrity(self, estimator, counters, data, params):
 
@@ -154,9 +159,7 @@ class IntegrityMonitoringClassEkfExp:
             self.L_k = estimator.L_k[params.ind_pose, :]
 
         # current horizon measurements
-        self.n_M= estimator.n_k
-        for i in self.n_ph:
-            self.n_M = self.n_M + int(i)
+        self.n_M= estimator.n_k + np.sum( np.array( self.n_ph ) )
         self.n_L_M = int( self.n_M/params.m_F )
 
         # the first time we have enough preceding horizon
@@ -180,7 +183,6 @@ class IntegrityMonitoringClassEkfExp:
             alpha = np.array([[-math.sin(estimator.XX[params.ind_yaw])],[math.cos(estimator.XX[params.ind_yaw])], [0]]);
 
             PX_2d= np.array([[float(estimator.PX[0,0]), float(estimator.PX[0,1]), float(estimator.PX[0,8])],[float(estimator.PX[1,0]), float(estimator.PX[1,1]), float(estimator.PX[1,8])],[float(estimator.PX[8,0]), float(estimator.PX[8,1]), float(estimator.PX[8,8])]])
-            estimator.PX= PX_2d
             self.sigma_hat = np.sqrt( np.dot(np.dot(np.transpose(alpha),PX_2d),alpha) );
 
             # detector threshold
@@ -211,19 +213,18 @@ class IntegrityMonitoringClassEkfExp:
                 self.compute_B_bar_matrix(estimator)
 
                 # M matrix
-                self.M_M = np.dot(np.dot(np.transpose(self.B_bar), np.inv(self.Y_M)), self.B_bar)
+                self.M_M = np.dot(np.dot(np.transpose(self.B_bar), np.linalg.inv(self.Y_M)), self.B_bar)
 
                 # set the threshold from the continuity req
-                self.detector_threshold = chi2.ppf(1 - self.C_req, self.n_M)
+                self.detector_threshold = chi2.ppf(1 - float(self.C_req), self.n_M)
 
                 # compute detector
-                self.q_M = np.sum(self.q_ph[1:self.M]) + estimator.q_k
+                self.q_M = np.sum(self.q_ph[0:self.M]) + estimator.q_k
 
                 # TODO: very inefficient --> do not transform from cell to matrix
-                self.P_MA_M = np.array([ [self.P_MA_k], [np.array(np.transpose(self.P_MA_ph[1:self.M]))]])
-
+                self.P_MA_M = np.concatenate(([self.P_MA_k], np.array(self.P_MA_ph[0:self.M])), axis =1)[0]
                 # fault probability of each association in the preceding horizon
-                self.P_F_M = self.P_MA_M + params.P_UA;
+                self.P_F_M = self.P_MA_M + float(params.P_UA);
 
                 # compute the hypotheses (n_H, n_max, inds_H)
                 self.compute_hypotheses(params)
@@ -235,16 +236,15 @@ class IntegrityMonitoringClassEkfExp:
                     self.p_hmi = 1;
 
                 else:  # if we don't have enough landmarks --> P(HMI)= 1
-                    self.P_H = np.ones(self.n_H, 1) * math.inf  # initializing P_H vector
-                    for i in range(self.n_H.shape[0]):
+                    self.P_H = np.ones((self.n_H, 1)) * math.inf  # initializing P_H vector
+                    for i in range(-1,self.n_H):
                         # build extraction matrix
-                        if (i == 0):
-                            self.compute_E_matrix(0, params.m_F);
+                        if (i == -1):
+                            self.compute_E_matrix(np.array([-1]), params.m_F);
                         else:
-                            self.compute_E_matrix(self.inds_H[i], params.m_F);
-                        # Worst-case fault direction
-                        f_M_dir = np.dot(np.dot(np.dot(np.dot(np.transpose(self.E),np.inv(self.E * self.M_M * np.transpose(self.E))),self.E), np.transpose(self.A_M)), alpha);
-                        f_M_dir = np.dot(f_M_dir,np.inv(np.linalg.norm(f_M_dir))); # normalize
+                            self.compute_E_matrix(np.array([self.inds_H[i]]), params.m_F);
+                        f_M_dir = np.dot(np.dot(np.dot(np.dot(np.transpose(self.E),np.linalg.inv(np.dot(np.dot(self.E, self.M_M), np.transpose(self.E)))),self.E), np.transpose(self.A_M)), alpha);
+                        f_M_dir = f_M_dir/np.linalg.norm(f_M_dir); # normalize
 
                         # worst-case fault magnitude
                         fx_hat_dir= np.dot(np.dot(np.transpose(alpha),self.A_M),f_M_dir);
@@ -255,29 +255,30 @@ class IntegrityMonitoringClassEkfExp:
                         f_mag_max = 5
                         f_mag_inc = 5
                         p_hmi_H_prev = -1
-                        for k in range(11):
-                            args = np.c_[self.f_M_mag, fx_hat_dir, M_dir, self.sigma_hat, params.alert_limit, np.dot(params.m_F,self.n_L_M)]
-                            bound = np.c_[f_mag_min, f_mag_max]
-                            [f_M_mag_out, p_hmi_H] = minimize(self.optimization_fn, args, bound)
+                        opt_func= lambda f_M_mag, fx_hat_dir, M_dir, sigma_hat, l, dof: self.optimization_fn( f_M_mag, fx_hat_dir, M_dir, sigma_hat, l, dof )
+                        bound = np.c_[f_mag_min, f_mag_max]
+                        for k in range(10):
+                            f_M_mag = sciopt.fminbound(opt_func, f_mag_min, f_mag_max, args=(fx_hat_dir, M_dir, self.sigma_hat, params.alert_limit, params.m_F*self.n_L_M))
+                            p_hmi_H = self.optimization_fn( f_M_mag, fx_hat_dir, M_dir, self.sigma_hat, params.alert_limit, params.m_F*self.n_L_M )
                             # make it a positive number
                             p_hmi_H = -p_hmi_H
                             # check if the new P(HMI|H) is smaller
-                            if (k == 1 or p_hmi_H_prev < p_hmi_H):
+                            if (k == 0 or p_hmi_H_prev < p_hmi_H):
                                 p_hmi_H_prev = p_hmi_H
                                 f_mag_min = f_mag_min + f_mag_inc
                                 f_mag_max = f_mag_max + f_mag_inc
                             else:
                                 p_hmi_H = p_hmi_H_prev
-
                         # Add P(HMI | H) to the integrity risk
                         if (i == 0):
                             self.P_H_0 = np.prod(1 - self.P_F_M)
                             self.p_hmi = self.p_hmi + np.dot(p_hmi_H, self.P_H_0)
                         else:
                             # unfaulted_inds= all( 1:self.n_L_M ~= fault_inds(i,:)', 1 );
-                            self.P_H[i] = np.prod(self.P_F_M(self.inds_H[i])); #...
+                            self.P_H[i] = np.prod(self.P_F_M[int(self.inds_H[i])]); #...
                             # * prod( 1 - P_F_M(unfaulted_inds)  );
-                            self.p_hmi = self.p_hmi + p_hmi_H * self.P_H(i)
+                            self.p_hmi = self.p_hmi + p_hmi_H * self.P_H[i]
+            input(self.p_hmi)
             # store integrity related data
             data.store_integrity_data(self, estimator, counters, params)
         # hey
@@ -305,49 +306,52 @@ class IntegrityMonitoringClassEkfExp:
 
     def compute_A_M_matrix(self, estimator):
         # build matrix A_M in the first time
-        if (self.A_M.size == 0 or self.calculate_A_M_recursively == 0):
+        if (self.A_M.any() == False or self.calculate_A_M_recursively == 0):
+            
             # allocate L_k and initialize
             self.A_M = np.zeros((self.m, self.n_M + self.m))
-            self.A_M[:, 1:estimator.n_k] = self.L_k
-            for i in range(self.M.shape[0]):
-                if (i == 1):
+            self.A_M[:, 0:estimator.n_k] = self.L_k
+
+            for i in range(self.M):
+                if (i == 0):
                     Dummy_Variable = self.Lpp_k
                 else:
                     Dummy_Variable= np.dot(Dummy_Variable,self.Lpp_ph[i-1]);
                 # if no landmarks in the FoV at some time in the preceding horizon
-                if (self.n_ph(i) > 0):
-                    n_start= estimator.n_k + np.sum( self.n_ph[1:i] ) + 1;
-                    n_end=   estimator.n_k + np.sum( self.n_ph[1:i+1] );
-                    self.A_M[:,n_start : n_end]= Dummy_Variable * self.L_ph[i];
+                if (self.n_ph[i] > 0):
+                    n_start= int( estimator.n_k + np.sum( self.n_ph[0:i] ) );
+                    n_end=   int( estimator.n_k + np.sum( self.n_ph[0:i+1] ) );
+                    self.A_M[:,n_start : n_end]= np.dot(Dummy_Variable, self.L_ph[i]);
 
             # last entry with only PSIs
-            self.A_M[:, self.n_M+1: self.n_M + self.m] = np.dot(Dummy_Variable,self.Lpp_ph[self.M])
+            self.A_M[:, self.n_M : self.n_M + self.m] = np.dot(Dummy_Variable,self.Lpp_ph[self.M-1])
         # calculate matrix A_M recusively
         else:
             self.A_M = np.array([self.L_k, self.Lpp_k*self.A_M])
-            self.A_M[:, self.n_M: - self.m] = None
-            self.A_M[:, self.A_M[self.A_M.shape[0]]-self.m+1 : self.A_M[self.A_M.shape[0]]] = np.dot(self.A_M[:, self.A_M[self.A_M.shape[0]]-self.m+1 : self.A_M[self.A_M.shape[0]]],np.inv(self.Lpp_ph[self.M +1]))
+            
+            np.delete(self.A_M,np.arange(self.n_M,self.A_M.shape[1]-self.m),axis=1)
+            self.A_M[:, self.A_M.shape[1]-self.m :] = np.dot(self.A_M[:, self.A_M.shape[1]-self.m :] ,np.linalg.inv(self.Lpp_ph[self.M]))
 
     def compute_B_bar_matrix(self, estimator):
         # Augmented B
-        self.B_bar = math.inf*np.ones(self.n_M, self.n_M + self.m )
-        A_prev = np.dot(np.inv(self.Lpp_k), self.A_M[ : , estimator.n_k + 1:self.A_M[self.A_M.shape[0]] ])
-        B_ind_row_start = estimator.n_k + 1
+        self.B_bar = math.inf*np.ones((self.n_M, self.n_M + self.m))
+        A_prev = np.dot(np.linalg.inv(self.Lpp_k), self.A_M[ : , estimator.n_k :self.A_M.shape[1] ])
+        B_ind_row_start = estimator.n_k
         B_ind_col_end = estimator.n_k
 
         # accounting for the case where there are no landmarks in the FoV at epoch k
         if (estimator.n_k > 0):
-            self.B_bar[1:estimator.n_k, :]  = np.concatenate(( np.eye(estimator.n_k), np.dot(np.dot(-self.H_k,self.Phi_ph[1]), A_prev) ), axis = 1)
+            self.B_bar[0:estimator.n_k, :]  = np.concatenate(( np.eye(estimator.n_k), np.dot(np.dot(-self.H_k,self.Phi_ph[0]), A_prev) ), axis = 1)
 
         # Recursive computation of B
-        for i in range(self.M.shape[0]):
-            A_prev = np.dot(np.linalg.inv(self.Lpp_ph[i]), A_prev[:, self.n_ph(i):])
+        for i in range(self.M):
+            A_prev = np.dot(np.linalg.inv(self.Lpp_ph[i]), A_prev[:, self.n_ph[i]:])
         # accounting for the case where there are no landmarks in the FoV at
         # one of the epochs in the preceding horizon
         if (self.n_ph[i] > 0):
             B = np.concatenate((np.eye(self.n_ph[i]), np.dot(np.dot(-self.H_ph[i], self.Phi_ph[i+1]),A_prev)),axis = 1);
-            B_ind_row_end = B_ind_row_start + self.n_ph(i) - 1
-            self.B_bar[B_ind_row_start:B_ind_row_end, 1:B_ind_col_end] = 0
+            B_ind_row_end = B_ind_row_start + self.n_ph[i]
+            self.B_bar[B_ind_row_start:B_ind_row_end, 0:B_ind_col_end] = 0
             self.B_bar[B_ind_row_start:B_ind_row_end, B_ind_col_end:] = B
 
             # increase row index for next element B
@@ -358,7 +362,7 @@ class IntegrityMonitoringClassEkfExp:
         # probability of "r" or more simultaneous faults
         flag_out = 0
         for r in range(self.P_F_M.shape[0]):
-            if  (np.sum(self.P_F_M)**r or math.factorial(r)  < params.I_H):
+            if  ( (np.sum(self.P_F_M)**r) / math.factorial(r) ) < float(params.I_H):
                 self.n_max = r-1
                 flag_out = 1
                 break
@@ -368,27 +372,20 @@ class IntegrityMonitoringClassEkfExp:
             self.n_max = r
 
         if (self.n_max > 1):
-            print('n_max: #d\n', self.n_max)
+            print('n_max:', self.n_max)
             if (params.SWITCH_ONLY_ONE_LM_FAULT == 1):
                 self.n_max = 1
 
         # compute number of hypotheses
         self.n_H = 0
         self.inds_H = [None]*200
-        start_ind = 1
-        for num_faults in range(self.n_max):
-            if (params.SWITCH_FACTOR_GRAPHS and (params.SWITCH_SIM==0)):
-                new_H = comb(self.n_L_M + (self.n_M_gps/6), num_faults);
-                self.n_H = self.n_H + new_H;
-                self.inds_H[ start_ind:start_ind+new_H - 1, 1]=np.array([ comb( self.n_L_M + (self.n_M_gps/6), num_faults)]).reshape(2,( self.n_L_M + (self.n_M_gps/6)).shape[0],num_faults.shape[0]);
-                start_ind= start_ind + new_H;
-            else:
-                new_H= comb(self.n_L_M, num_faults);
-                self.n_H= self.n_H + new_H;
-                self.inds_H[ start_ind:start_ind+new_H - 1, 1 ]=...
-                np.array([ comb(self.n_L_M, num_faults)]) .reshape(2,self.n_L_M.shape[0],num_faults.shape[0])
-                start_ind= start_ind + new_H;
-        self.inds_H[start_ind:self.inds_H[self.inds_H.shape[0]]] = None
+        start_ind = 0
+        for num_faults in range(1,self.n_max+1):
+            new_H= int(comb(self.n_L_M, num_faults));
+            self.n_H= self.n_H + new_H;
+            self.inds_H[ start_ind:start_ind+new_H ]= np.array(comb(np.arange(self.n_L_M), num_faults))
+            start_ind= start_ind + new_H;
+        del self.inds_H[start_ind:len(self.inds_H)]
 
     def compute_Y_M_matrix(self, estimator):
         # if it's the first epoch --> build the Y_M
@@ -398,14 +395,11 @@ class IntegrityMonitoringClassEkfExp:
             self.Y_M[ 0:estimator.n_k, 0:estimator.n_k ]= estimator.Y_k;
 
             for i in range(self.M):
-                n_start = estimator.n_k
-                n_end = estimator.n_k + self.n_ph[i-1]
-                for j in range (i-1):
-                    n_start = n_start + self.n_ph[j];
-                    n_end = n_end + self.n_ph[j];
+                n_start = estimator.n_k + np.sum( np.array( self.n_ph )[0:i] )
+                n_end = estimator.n_k + np.sum( np.array( self.n_ph )[0:i+1] )
                 self.Y_M[ n_start: n_end, n_start: n_end ]= self.Y_ph[i];
         else:  # update Y_M
-            self.Y_M = np.concatenate((np.concatenate((estimator.Y_k, np.zeros((estimator.n_k,np.sum(self.n_ph[1:self.M])))),axis = 1),np.concatenate((np.zeros((np.sum(self.n_ph[1:self.M]),estimator.n_k)), self.Y_M[1:np.sum(self.n_ph[1:self.M]), 1:np.sum(self.n_ph[1:self.M])]),axis =1)),axis = 0)
+            self.Y_M = np.concatenate( (np.concatenate( (estimator.Y_k, np.zeros((estimator.n_k,np.sum(np.array(self.n_ph[0:self.M]))))),axis = 1),np.concatenate((np.zeros((np.sum(np.array(self.n_ph[0:self.M])),estimator.n_k)), self.Y_M[0:np.sum(np.array(self.n_ph[0:self.M])), 0:np.sum(np.array(self.n_ph[0:self.M]))]),axis =1)) ,axis = 0 )
 
     def update_preceding_horizon(self, estimator, params):
 
@@ -504,18 +498,19 @@ class IntegrityMonitoringClassEkfExp:
              self.mu_k= np.dot(self.kappa,( np.sqrt(self.T_d) - np.sqrt( chi2.ppf(1 - params.I_MA , self.n_M) ) )**2);
           else:
               # compute Q matrix with A_M_(k-1) , Phi_(k-1), P_k, n_M_(k-1)
-              Q= np.dot(np.dot(np.dot(np.dot(np.transpose(self.A_M) * np.transpose(self.Phi_ph[0])) * estimator.PX[params.ind_pose, params.ind_pose]) * self.Phi_ph[0]) * self.A_M);
+              PX_2d= np.array([[float(estimator.PX[0,0]), float(estimator.PX[0,1]), float(estimator.PX[0,8])],[float(estimator.PX[1,0]), float(estimator.PX[1,1]), float(estimator.PX[1,8])],[float(estimator.PX[8,0]), float(estimator.PX[8,1]), float(estimator.PX[8,8])]])
+              Q= np.dot(np.dot(np.dot(np.dot(np.transpose(self.A_M), np.transpose(self.Phi_ph[0])), PX_2d), self.Phi_ph[0]), self.A_M);
 
               self.kappa= 0;
-              C = comb(self.n_L_M[1,:],self.n_max);#set of possible fault indices for n_max simultanous faults
-              for i in range(C.shape[1]):
+              C = comb(np.arange(self.n_L_M),self.n_max);#set of possible fault indices for n_max simultanous faults
+              for i in range(C.shape[0]):
                   # build extraction matrix
-                  self.compute_E_matrix(C[i,:], params.m_F);
-                  kappa_H= eigs( np.transpose(np.dot(np.dot(self.E,Q),self.E)), 1) * eigs( np.dot(np.dot(self.E,self.M_M),np.transpose(self.E)), 1);
+                  self.compute_E_matrix(np.array([C[i]]), params.m_F);
+                  kappa_H= max(eigs( np.dot(np.dot(self.E,Q),np.transpose(self.E)))[0]) * min(eigs( np.dot(np.dot(self.E,self.M_M),np.transpose(self.E)))[0]);
                   # take the largest kappa
                   if (kappa_H > self.kappa):
                      self.kappa= kappa_H
-              self.mu_k= np.dot(self.kappa ,( np.sqrt(self.T_d) - np.sqrt( chi2.ppf[1 - params.I_MA , self.n_M] ) )**2);
+              self.mu_k= np.dot(self.kappa ,( np.sqrt(self.T_d) - np.sqrt( chi2.ppf(1 - float(params.I_MA) , int(self.n_M)) ) )**2);
 
           #loop through each associated landmark
           for t in range (estimator.association_no_zeros.shape[0]):
@@ -563,7 +558,6 @@ class IntegrityMonitoringClassEkfExp:
                          self.P_MA_k[t]= self.P_MA_k[t] - chi2.cdf( ( IIN_l_t - np.sqrt(params.T_NN) )**2 , chi_dof, self.mu_k );
 
               # store the P_MA for the full LMs
-              self.P_MA_k_full[t]= self.P_MA_k[t];
               # landmark selection
               if (params.SWITCH_LM_SELECTION==1):
                   if (self.P_MA_k[t] > params.P_MA_max):
