@@ -1,0 +1,25 @@
+\header   = Modification_Record_on_Class_folder           
+\location = \utils\classes\
+\data_created = 20190623
+\last_modified = {20190624,yihe} 
+\alias_user   = {('YH',Yihe),('OM', Osama),('DN',Dominic)}             
+===============================================================================================================
+
+<Stage_I: 20190623 >                        \functional? = "untested" 
+------------------------------------------------------------------------------
+\Progress{  [YH] GPSClass.py                                [Completed]
+            [YH] IMUClass.py                                [Cond-Completed*1]
+            [YH] LidarClass.py                              [Completed]
+            [YH] ParametersClass.py                         [Cond-Completed*2]
+            [YH] EstimatorClassSlam.py                      [completed]
+            [YH] DataClass.py                               [halfly-fucked*3]
+            [YH] CountersClass.py                           [Completed]
+            [YH] PredictionDataClass.py                     [Completed]
+            [YH] UpdateDataClass.py                         [Completed]
+            [YH] IntegrityDataClass.py                      [Completed]
+            [YH] IntegrityMonitoringClassEkfSim             []  
+          }    
+------------------------------------------------------------------------------
+*1 \func{'plot_measurements(self)'} imcomplete, not in needed.
+*2 \lines{384-391} incomplete, alternatives required.
+*3  all plot functions not done, need python alternative.
