@@ -222,7 +222,9 @@ class IntegrityMonitoringClassEkfExp:
                 self.q_M = np.sum(self.q_ph[0:self.M]) + estimator.q_k
 
                 # TODO: very inefficient --> do not transform from cell to matrix
-                self.P_MA_M = np.concatenate(([self.P_MA_k], np.array(self.P_MA_ph[0:self.M])), axis =1)[0]
+                print("shape",np.array(self.P_MA_ph[0:self.M]).shape)
+                tmp_nr = np.array(self.P_MA_ph[0:self.M]).shape[1] - self.P_MA_k.shape[0]
+                self.P_MA_M = np.concatenate((np.reshape(np.pad(self.P_MA_k,(0,tmp_nr),'constant', constant_values=(math.inf)),(np.array(self.P_MA_ph[0:self.M]).shape)), np.array(self.P_MA_ph[0:self.M])), axis =1)[0]
                 # fault probability of each association in the preceding horizon
                 self.P_F_M = self.P_MA_M + float(params.P_UA);
 
@@ -352,7 +354,11 @@ class IntegrityMonitoringClassEkfExp:
             B = np.concatenate((np.eye(self.n_ph[i]), np.dot(np.dot(-self.H_ph[i], self.Phi_ph[i+1]),A_prev)),axis = 1);
             B_ind_row_end = B_ind_row_start + self.n_ph[i]
             self.B_bar[B_ind_row_start:B_ind_row_end, 0:B_ind_col_end] = 0
+            tmp_nr = B_ind_row_end-B_ind_row_start
+            tmp_nc = self.B_bar.shape[1] - B_ind_col_end
+            B = np.pad(B,((0,tmp_nr-B.shape[0]),(0,tmp_nc - B.shape[1])),'constant', constant_values=(math.inf))
             self.B_bar[B_ind_row_start:B_ind_row_end, B_ind_col_end:] = B
+            print("shape",self.B_bar.shape)
 
             # increase row index for next element B
             B_ind_row_start = B_ind_row_start + self.n_ph[i]
