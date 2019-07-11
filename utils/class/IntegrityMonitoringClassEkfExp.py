@@ -129,10 +129,12 @@ class IntegrityMonitoringClassEkfExp:
     # --------------------------------------------------------------------------
     # --------------------------------------------------------------------------
     def compute_E_matrix(self, i, m_F):
-        if (np.sum(i) == -1):  # E matrix for only previous state faults
+        if (np.sum(i) == 0):  # E matrix for only previous state faults
             self.E = np.zeros((self.m, self.n_M + self.m))
             self.E[:, (self.E.shape[1]-self.m):] = np.eye(self.m)
+            print("I am in 0")
         else:  # E matrix with faults in the PH
+            print("I am in 1")
             self.E = np.zeros((self.m + m_F*(i.shape[0]) , self.n_M + self.m))
             self.E[(self.E.shape[0]-self.m): , (self.E.shape[1]-self.m):]= np.eye(self.m) # previous bias
             for j in range(i.shape[0]):
@@ -156,7 +158,7 @@ class IntegrityMonitoringClassEkfExp:
             self.L_k = []
         else:  # extract the indexes from the pose
             self.H_k = estimator.H_k[:, params.ind_pose]
-            self.L_k = estimator.L_k[params.ind_pose, :]
+            self.L_k = estimator.L_k[params.ind_pose-1, :]
 
         # current horizon measurements
         self.n_M= estimator.n_k + np.sum( np.array( self.n_ph ) )
@@ -237,10 +239,10 @@ class IntegrityMonitoringClassEkfExp:
 
                 else:  # if we don't have enough landmarks --> P(HMI)= 1
                     self.P_H = np.ones((self.n_H, 1)) * math.inf  # initializing P_H vector
-                    for i in range(-1,self.n_H):
+                    for i in range(0,self.n_H):
                         # build extraction matrix
-                        if (i == -1):
-                            self.compute_E_matrix(np.array([-1]), params.m_F);
+                        if (i == 0):
+                            self.compute_E_matrix(np.array([0]), params.m_F);
                         else:
                             self.compute_E_matrix(np.array([self.inds_H[i]]), params.m_F);
                         f_M_dir = np.dot(np.dot(np.dot(np.dot(np.transpose(self.E),np.linalg.inv(np.dot(np.dot(self.E, self.M_M), np.transpose(self.E)))),self.E), np.transpose(self.A_M)), alpha);
@@ -335,13 +337,17 @@ class IntegrityMonitoringClassEkfExp:
     def compute_B_bar_matrix(self, estimator):
         # Augmented B
         self.B_bar = math.inf*np.ones((self.n_M, self.n_M + self.m))
-        A_prev = np.dot(np.linalg.inv(self.Lpp_k), self.A_M[ : , estimator.n_k :self.A_M.shape[1] ])
-        B_ind_row_start = estimator.n_k
+        A_prev = np.dot(np.linalg.inv(self.Lpp_k), self.A_M[ : , estimator.n_k : ])
+        B_ind_row_start = estimator.n_k+1
         B_ind_col_end = estimator.n_k
+
 
         # accounting for the case where there are no landmarks in the FoV at epoch k
         if (estimator.n_k > 0):
             self.B_bar[0:estimator.n_k, :]  = np.concatenate(( np.eye(estimator.n_k), np.dot(np.dot(-self.H_k,self.Phi_ph[0]), A_prev) ), axis = 1)
+            print(self.H_k.shape)
+            print(self.Phi_ph[0].shape)
+            input(A_prev.shape)
 
         # Recursive computation of B
         for i in range(self.M):
@@ -351,8 +357,8 @@ class IntegrityMonitoringClassEkfExp:
         if (self.n_ph[i] > 0):
             B = np.concatenate((np.eye(self.n_ph[i]), np.dot(np.dot(-self.H_ph[i], self.Phi_ph[i+1]),A_prev)),axis = 1);
             B_ind_row_end = B_ind_row_start + self.n_ph[i]
-            self.B_bar[B_ind_row_start:B_ind_row_end, 0:B_ind_col_end] = 0
-            self.B_bar[B_ind_row_start:B_ind_row_end, B_ind_col_end:] = B
+            self.B_bar[B_ind_row_start-1:B_ind_row_end, 0:B_ind_col_end] = 0
+            self.B_bar[B_ind_row_start-1:B_ind_row_end, B_ind_col_end:] = B
 
             # increase row index for next element B
             B_ind_row_start = B_ind_row_start + self.n_ph[i]
@@ -503,6 +509,7 @@ class IntegrityMonitoringClassEkfExp:
 
               self.kappa= 0;
               C = comb(np.arange(self.n_L_M),self.n_max);#set of possible fault indices for n_max simultanous faults
+              C = C+1
               for i in range(C.shape[0]):
                   # build extraction matrix
                   self.compute_E_matrix(np.array([C[i]]), params.m_F);
