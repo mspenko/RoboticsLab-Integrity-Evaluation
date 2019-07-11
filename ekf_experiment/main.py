@@ -90,7 +90,6 @@ for epoch in range(imu.num_readings):
         if ( (params.SWITCH_CALIBRATION==0) and (params.SWITCH_GPS_UPDATE==1) ):
             # GPS update -- only use GPS vel if it's fast
             estimator.gps_update( gps.msmt[:,counters.k_gps], gps.R[counters.k_gps,:], params);
-
             # This is used to store gps msmt and R recieved at lidar epoch for FG
             gps.IS_GPS_AVAILABLE= 1;
             current_gps_msmt= gps.msmt[:,counters.k_gps];
@@ -118,7 +117,6 @@ for epoch in range(imu.num_readings):
     if ((counters.time_sim + params.dt_imu) > counters.time_lidar and params.SWITCH_LIDAR_UPDATE):
         
         if (epoch > params.num_epochs_static):
-
             # Read the lidar features
             epochLIDAR= lidar.time[counters.k_lidar,0];
             lidar.get_msmt( epochLIDAR, params );
@@ -131,10 +129,8 @@ for epoch in range(imu.num_readings):
 
             # Evaluate the probability of mis-associations
             im.prob_of_MA( estimator, params);
-
             # Lidar update
             estimator.lidar_update(lidar.msmt[:,0:2], params);
-
             # Lineariza and discretize
             estimator.linearize_discretize( imu.msmt[:,epoch+1], params.dt_imu, params); #Osama
             
@@ -158,7 +154,7 @@ for epoch in range(imu.num_readings):
             
             # integrity monitoring
             im.monitor_integrity(estimator, counters, data_obj, params);
-            
+
             # Store data
             data_obj.store_msmts( body2nav_3D.body2nav_3D(lidar.msmt, estimator.XX[0:9]) );# Add current msmts in Nav-frame
             counters.k_update= data_obj.store_update(counters.k_update, estimator, counters.time_sim);

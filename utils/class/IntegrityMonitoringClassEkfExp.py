@@ -145,11 +145,11 @@ class IntegrityMonitoringClassEkfExp:
         self.Phi_k = estimator.Phi_k  ######## CAREFUL
         for i in range(11):
            self.Phi_k= np.dot(self.Phi_k, estimator.Phi_k)
+
         
         Phi_k_2d= np.array([[float(self.Phi_k[0,0]), float(self.Phi_k[0,1]), float(self.Phi_k[0,8])],[float(self.Phi_k[1,0]), float(self.Phi_k[1,1]), float(self.Phi_k[1,8])],[float(self.Phi_k[8,0]), float(self.Phi_k[8,1]), float(self.Phi_k[8,8])]])
 
         self.Phi_k = Phi_k_2d
-
         # build L and H for the current time using only the pose indexes
         if (estimator.n_k == 0):  # no landmarks in the FoV at epoch k
             self.H_k = []
@@ -166,7 +166,7 @@ class IntegrityMonitoringClassEkfExp:
         if (self.is_extra_epoch_needed == -1 and self.n_L_M >= params.min_n_L_M and counters.k_im > 1):
             self.is_extra_epoch_needed = 1
         # monitor integrity if the number of LMs in the preceding horizon is more than threshold
-        if(( (params.SWITCH_FIXED_LM_SIZE_PH == 1) and (self.n_L_M >= params.min_n_L_M) and (self.is_extra_epoch_needed == False) ) or( (params.SWITCH_FIXED_LM_SIZE_PH==0) and (counters.k_im > self.M + 2) )):
+        if(( (params.SWITCH_FIXED_LM_SIZE_PH == 1) and (self.n_L_M >= params.min_n_L_M) and (self.is_extra_epoch_needed == False) ) or( (params.SWITCH_FIXED_LM_SIZE_PH==0) and (counters.k_im > self.M + 1) )):
 
             # Modify preceding horizon to have enough landmarks
             if (params.SWITCH_FIXED_LM_SIZE_PH == 1):
@@ -193,6 +193,7 @@ class IntegrityMonitoringClassEkfExp:
                 self.Lpp_k = self.Phi_ph[0];
             else:
                 self.Lpp_k = self.Phi_ph[0] - np.dot(np.dot(self.L_k, self.H_k), self.Phi_ph[0]);
+
             # accounting for the case where there are no landmarks in the FoV at
             # epoch k and the whole preceding horizon
             if (self.n_M == 0):
@@ -243,6 +244,7 @@ class IntegrityMonitoringClassEkfExp:
                             self.compute_E_matrix(np.array([-1]), params.m_F);
                         else:
                             self.compute_E_matrix(np.array([self.inds_H[i]]), params.m_F);
+
                         f_M_dir = np.dot(np.dot(np.dot(np.dot(np.transpose(self.E),np.linalg.inv(np.dot(np.dot(self.E, self.M_M), np.transpose(self.E)))),self.E), np.transpose(self.A_M)), alpha);
                         f_M_dir = f_M_dir/np.linalg.norm(f_M_dir); # normalize
 
@@ -262,6 +264,7 @@ class IntegrityMonitoringClassEkfExp:
                             p_hmi_H = self.optimization_fn( f_M_mag, fx_hat_dir, M_dir, self.sigma_hat, params.alert_limit, params.m_F*self.n_L_M )
                             # make it a positive number
                             p_hmi_H = -p_hmi_H
+
                             # check if the new P(HMI|H) is smaller
                             if (k == 0 or p_hmi_H_prev < p_hmi_H):
                                 p_hmi_H_prev = p_hmi_H
@@ -272,15 +275,15 @@ class IntegrityMonitoringClassEkfExp:
                         # Add P(HMI | H) to the integrity risk
                         if (i == 0):
                             self.P_H_0 = np.prod(1 - self.P_F_M)
-                            self.p_hmi = self.p_hmi + np.dot(p_hmi_H, self.P_H_0)
+                            self.p_hmi = self.p_hmi + p_hmi_H*self.P_H_0
                         else:
                             # unfaulted_inds= all( 1:self.n_L_M ~= fault_inds(i,:)', 1 );
                             self.P_H[i] = np.prod(self.P_F_M[int(self.inds_H[i])]); #...
                             # * prod( 1 - P_F_M(unfaulted_inds)  );
                             self.p_hmi = self.p_hmi + p_hmi_H * self.P_H[i]
-            input(self.p_hmi)
             # store integrity related data
             data.store_integrity_data(self, estimator, counters, params)
+
         # hey
         elif (counters.k_im > 0):  # if it's the first time --> cannot compute Lpp_k
             if (estimator.n_k == 0):
@@ -316,6 +319,7 @@ class IntegrityMonitoringClassEkfExp:
                 if (i == 0):
                     Dummy_Variable = self.Lpp_k
                 else:
+                    #input(self.Lpp_ph[i-1])
                     Dummy_Variable= np.dot(Dummy_Variable,self.Lpp_ph[i-1]);
                 # if no landmarks in the FoV at some time in the preceding horizon
                 if (self.n_ph[i] > 0):
@@ -327,7 +331,7 @@ class IntegrityMonitoringClassEkfExp:
             self.A_M[:, self.n_M : self.n_M + self.m] = np.dot(Dummy_Variable,self.Lpp_ph[self.M-1])
         # calculate matrix A_M recusively
         else:
-            self.A_M = np.array([self.L_k, self.Lpp_k*self.A_M])
+            self.A_M = np.array([self.L_k, np.dot(self.Lpp_k,self.A_M)])
             
             np.delete(self.A_M,np.arange(self.n_M,self.A_M.shape[1]-self.m),axis=1)
             self.A_M[:, self.A_M.shape[1]-self.m :] = np.dot(self.A_M[:, self.A_M.shape[1]-self.m :] ,np.linalg.inv(self.Lpp_ph[self.M]))
@@ -478,8 +482,7 @@ class IntegrityMonitoringClassEkfExp:
           spsi= float( math.sin(estimator.XX[params.ind_yaw]) );
           cpsi= float( math.cos(estimator.XX[params.ind_yaw]) );
           h_t= np.zeros((2,1));
-          h_l= np.zeros((2,1));
-          
+          h_l= np.zeros((2,1));        
           tmp = []
           for i in range(estimator.association.shape[0]):
               if estimator.association[i] == -1:
@@ -567,7 +570,6 @@ class IntegrityMonitoringClassEkfExp:
                       for i in range(estimator.association.shape[0]):
                           if estimator.association[i] == lm_id_t:
                             estimator.association[i] = -1
-
                # not more than probability one
               if (self.P_MA_k[t] > 1):
                   self.P_MA_k[t]= 1

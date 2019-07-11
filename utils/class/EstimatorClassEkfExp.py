@@ -101,12 +101,12 @@ class EstimatorClassEkfExp:
           z= np.array([[np.zeros((6,1))],[ self.initial_attitude]])
 
           # Calibration msmt update
-          L= np.transpose(self.PX[0:15,0:15] * params.H_cal)/(params.H_cal*self.PX[0:15,0:15]*np.transpose(params.H_cal) + params.R_cal)
-          z_hat= params.H_cal * self.XX[0:15]
+          L= np.dot( np.transpose( np.dot(self.PX[0:15,0:15], params.H_cal)) , np.linalg.inv(np.dot(np.dot(params.H_cal,self.PX[0:15,0:15]),np.transpose(params.H_cal)) + params.R_cal) )
+          z_hat= np.dot(params.H_cal, self.XX[0:15])
           innov= z - z_hat
           innov= pi_to_pi.pi_to_pi(innov)
-          self.XX[0:15]= self.XX[0:15] + L*innov
-          self.PX[0:15,0:15]= self.PX[0:15,0:15] - L * params.H_cal * self.PX[0:15,0:15]
+          self.XX[0:15]= self.XX[0:15] + np.dot(L,innov)
+          self.PX[0:15,0:15]= self.PX[0:15,0:15] - np.dot( np.dot(L, params.H_cal), self.PX[0:15,0:15] )
 
           # linearize and discretize after every non-IMU update
           tmp = self.linearize_discretize( imu_msmt, params.dt_imu, params)
@@ -161,8 +161,8 @@ class EstimatorClassEkfExp:
           innov= z - np.dot(H, self.XX)
           innov= pi_to_pi.pi_to_pi(innov)
           self.XX[8]= pi_to_pi.pi_to_pi(self.XX[8])
-          self.XX= self.XX + L*innov
-          self.PX= self.PX - L*H*self.PX
+          self.XX= self.XX + np.dot(L,innov)
+          self.PX= self.PX - np.dot(np.dot(L,H),self.PX)
       # ----------------------------------------------
       # ---------------------------------------------- 
       def yawMeasurement(self, w, params):
@@ -180,13 +180,13 @@ class EstimatorClassEkfExp:
           self.XX[8]= pi_to_pi.pi_to_pi( self.XX[8] )
           # Update
           R_BN= np.transpose(R_NB_rot.R_NB_rot( self.XX[6], self.XX[7], self.XX[8] ))
-          H= np.array([0,0,1]) * R_BN * np.array([np.zeros(3),np.eye(3),np.zeros((3,9))])
-          L= bj.PX*np.transpose(H) / (H*self.PX*np.transpose(H) + R)
-          z_hat= H * self.XX
+          H= np.dot(np.dot(np.array([0,0,1]), R_BN), np.array([np.zeros(3),np.eye(3),np.zeros((3,9))]))
+          L= np.dot( np.dot(self.PX, np.transpose(H)), np.linalg.inv(np.dot(np.dot(H,self.PX),np.transpose(H)) + R) )
+          z_hat= np.dot(H, self.XX)
           innov= 0 - z_hat
 
-          self.XX= self.XX + L*innov
-          self.PX= self.PX - L*H*self.PX
+          self.XX= self.XX + np.dot(L,innov)
+          self.PX= self.PX - np.dot(np.dot(L,H),self.PX)
 
           # This is a different option to do the update in Z, but it is more
           # computationally expensive and does not offer better results in my case
@@ -344,7 +344,6 @@ class EstimatorClassEkfExp:
              self.n_k= self.association_no_zeros.shape[0] * params.m_F;
           else:
              self.n_k= 0
-
           #Build Jacobian H
           R= np.kron( params.R_lidar, np.eye( int(self.n_k / params.m_F) ) );
           self.H_k= np.zeros((self.n_k, self.XX.shape[0]));
@@ -434,7 +433,7 @@ class EstimatorClassEkfExp:
               dy= self.XX[ind[1]] - self.XX[1];
     
               H= np.array([[-cpsi, -spsi, -dx*spsi + dy*cpsi],[spsi,  -cpsi, -dx*cpsi - dy*spsi]]) 
-              Y= H * self.PX[0:2,8] * np.transpose(H) + R
+              Y= np.dot( np.dot( H, self.PX[0:2,8]), np.transpose(H) ) + R
               
               tmp0 = PX.shape[0]
               tmp1 = PX.shape[1]
