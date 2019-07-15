@@ -223,8 +223,7 @@ class IntegrityMonitoringClassEkfExp:
 
                 # TODO: very inefficient --> do not transform from cell to matrix
                 print("shape",np.array(self.P_MA_ph[0:self.M]).shape)
-                tmp_nr = np.array(self.P_MA_ph[0:self.M]).shape[1] - self.P_MA_k.shape[0]
-                self.P_MA_M = np.concatenate((np.reshape(np.pad(self.P_MA_k,(0,tmp_nr),'constant', constant_values=(math.inf)),(np.array(self.P_MA_ph[0:self.M]).shape)), np.array(self.P_MA_ph[0:self.M])), axis =1)[0]
+                self.P_MA_M = np.concatenate((self.P_MA_k.resize((6,1),refcheck=False), np.array(self.P_MA_ph[0:self.M])), axis =1)[0]
                 # fault probability of each association in the preceding horizon
                 self.P_F_M = self.P_MA_M + float(params.P_UA);
 
