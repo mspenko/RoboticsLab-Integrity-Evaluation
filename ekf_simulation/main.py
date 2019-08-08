@@ -19,17 +19,20 @@ import EstimatorClassEkfSim
 
 # create objects
 params= ParametersClass.ParametersClass("simulation_kf");
-#im= IntegrityMonitoringClassEkfSim.IntegrityMonitoringClassEkfSim(params);
+#im= IntegrityMonitoringClassEkfSim.IntegrityMonitoringClassEkfSim(params,estimator);
 estimator= EstimatorClassEkfSim.EstimatorClassEkfSim(params);
 data_obj= DataClass.DataClass(params.num_epochs_sim, params.num_epochs_sim, params);
 counters= CountersClass.CountersClass(np.array([]), np.array([]), params);
 
 # ----------------------------------------------------------
 # -------------------------- LOOP --------------------------
-for epoch in range( 1,params.num_epochs_sim+1):
+#for epoch in range( 1,params.num_epochs_sim+1):
+epoch =1
+while(estimator.goal_is_reached ==0 and epoch <= params.num_epochs_sim):
     print('Epoch -> '+str(epoch))
     # ------------- Odometry -------------
-    estimator.odometry_update( params );
+    estimator.compute_steering(params)
+    estimator.odometry_update( params)
     # -------------------------------
     
     # Store data
@@ -91,13 +94,12 @@ for epoch in range( 1,params.num_epochs_sim+1):
         
         # increase integrity counter
         counters.increase_integrity_monitoring_counter();
-    end
     # -----------------------------------------
     
     # increase time
     counters.increase_time_sum_sim(params);
     counters.increase_time_sim(params);
-end
+    epoch = epoch+1
 # ------------------------- END LOOP -------------------------
 # ------------------------------------------------------------
 
@@ -106,7 +108,7 @@ end
 
 # Store data for last epoch
 data_obj.delete_extra_allocated_memory(counters)
-
+#changed
 '''
 # ------------- PLOTS -------------
 data_obj.plot_map_localization_sim(estimator, params.num_epochs_sim, params)
