@@ -6,6 +6,7 @@ from scipy.stats import ncx2
 import scipy.optimize as sciopt
 from scipy.special import comb
 from scipy.sparse.linalg import eigs
+from scipy.stats import ncx2
 from scipy.stats import chi2
 
 
@@ -223,8 +224,13 @@ class IntegrityMonitoringClassEkfExp:
                 self.q_M = np.sum(self.q_ph[0:self.M]) + estimator.q_k
 
                 # TODO: very inefficient --> do not transform from cell to matrix
-                print("shape",np.array(self.P_MA_ph[0:self.M]).shape)
-                self.P_MA_M = np.concatenate((self.P_MA_k.resize((6,1),refcheck=False), np.array(self.P_MA_ph[0:self.M])), axis =1)[0]
+                for i in range(self.M):
+                    if i == 0:
+                        tmp= np.array(self.P_MA_ph[i])
+                    else:
+                        tmp= np.concatenate(([tmp],[np.array(self.P_MA_ph[i])]),axis =1)[0]
+                self.P_MA_M = np.concatenate(([self.P_MA_k], [tmp]), axis =1)[0]
+
                 # fault probability of each association in the preceding horizon
                 self.P_F_M = self.P_MA_M + float(params.P_UA);
 
@@ -353,19 +359,20 @@ class IntegrityMonitoringClassEkfExp:
             A_prev = np.dot(np.linalg.inv(self.Lpp_ph[i]), A_prev[:, self.n_ph[i]:])
         # accounting for the case where there are no landmarks in the FoV at
         # one of the epochs in the preceding horizon
-        if (self.n_ph[i] > 0):
-            B = np.concatenate((np.eye(self.n_ph[i]), np.dot(np.dot(-self.H_ph[i], self.Phi_ph[i+1]),A_prev)),axis = 1);
-            B_ind_row_end = B_ind_row_start + self.n_ph[i]
-            self.B_bar[B_ind_row_start:B_ind_row_end, 0:B_ind_col_end] = 0
-            tmp_nr = B_ind_row_end-B_ind_row_start
-            tmp_nc = self.B_bar.shape[1] - B_ind_col_end
-            B = np.pad(B,((0,tmp_nr-B.shape[0]),(0,tmp_nc - B.shape[1])),'constant', constant_values=(math.inf))
-            self.B_bar[B_ind_row_start:B_ind_row_end, B_ind_col_end:] = B
-            print("shape",self.B_bar.shape)
+            if (self.n_ph[i] > 0):
+                B = np.concatenate((np.eye(self.n_ph[i]), np.dot(np.dot(-self.H_ph[i], self.Phi_ph[i+1]),A_prev)),axis = 1);
+                B_ind_row_end = B_ind_row_start + self.n_ph[i]
+                #print(B)
+                #print(B_ind_row_start)
+                #print(B_ind_row_end)
+                #print(B_ind_col_end)
+                #input(self.H_ph[i])
+                self.B_bar[B_ind_row_start:B_ind_row_end, 0:B_ind_col_end] = 0
+                self.B_bar[B_ind_row_start:B_ind_row_end, B_ind_col_end:] = B
 
-            # increase row index for next element B
-            B_ind_row_start = B_ind_row_start + self.n_ph[i]
-            B_ind_col_end = B_ind_col_end + self.n_ph[i]
+                # increase row index for next element B
+                B_ind_row_start = B_ind_row_start + self.n_ph[i]
+                B_ind_col_end = B_ind_col_end + self.n_ph[i]
 
     def compute_hypotheses(self, params):
         # probability of "r" or more simultaneous faults
@@ -408,7 +415,10 @@ class IntegrityMonitoringClassEkfExp:
                 n_end = estimator.n_k + np.sum( np.array( self.n_ph )[0:i+1] )
                 self.Y_M[ n_start: n_end, n_start: n_end ]= self.Y_ph[i];
         else:  # update Y_M
-            self.Y_M = np.concatenate( (np.concatenate( (estimator.Y_k, np.zeros((estimator.n_k,np.sum(np.array(self.n_ph[0:self.M]))))),axis = 1),np.concatenate((np.zeros((np.sum(np.array(self.n_ph[0:self.M])),estimator.n_k)), self.Y_M[0:np.sum(np.array(self.n_ph[0:self.M])), 0:np.sum(np.array(self.n_ph[0:self.M]))]),axis =1)) ,axis = 0 )
+            if (estimator.Y_k).any():
+                self.Y_M = np.concatenate( (np.concatenate( (estimator.Y_k, np.zeros((estimator.n_k,np.sum(np.array(self.n_ph[0:self.M]))))),axis = 1),np.concatenate((np.zeros((np.sum(np.array(self.n_ph[0:self.M])),estimator.n_k)), self.Y_M[0:np.sum(np.array(self.n_ph[0:self.M])), 0:np.sum(np.array(self.n_ph[0:self.M]))]),axis =1)) ,axis = 0 )
+            else:
+                self.Y_M = np.concatenate( ( np.zeros((estimator.n_k,np.sum(np.array(self.n_ph[0:self.M])))),np.concatenate((np.zeros((np.sum(np.array(self.n_ph[0:self.M])),estimator.n_k)), self.Y_M[0:np.sum(np.array(self.n_ph[0:self.M])), 0:np.sum(np.array(self.n_ph[0:self.M]))]),axis =1)) ,axis = 0 )
 
     def update_preceding_horizon(self, estimator, params):
 
@@ -494,10 +504,8 @@ class IntegrityMonitoringClassEkfExp:
                 tmp.append(i)
 
           estimator.association_no_zeros = np.delete(estimator.association,tmp,axis = 0)
-
           self.P_MA_k= np.ones(estimator.association_no_zeros.shape[0]) * (-1);
           self.P_MA_k_full= self.P_MA_k;
-
           # compute kappa
           if (self.A_M.any() == 0):
              self.mu_k = 0;
@@ -527,7 +535,7 @@ class IntegrityMonitoringClassEkfExp:
 
               # initialize the P(MA)
               self.P_MA_k[t]= estimator.FoV_landmarks_at_k.shape[0] - 1;
-
+              
               # build the necessary parameters
               landmark= estimator.landmark_map[ lm_id_t ];
               dx= float(landmark[0] - estimator.XX[0]);
@@ -563,14 +571,18 @@ class IntegrityMonitoringClassEkfExp:
                          self.P_MA_k[t]= 1;
                          break
                      else:
-                         self.P_MA_k[t]= self.P_MA_k[t] - chi2.cdf( ( IIN_l_t - np.sqrt(params.T_NN) )**2 , chi_dof, self.mu_k );
+                         if (self.mu_k == 0):
+                             self.P_MA_k[t]= self.P_MA_k[t] - chi2.cdf( float( ( IIN_l_t - np.sqrt(params.T_NN) )**2 ), int(chi_dof));
+                         else:
+                             self.P_MA_k[t]= self.P_MA_k[t] - ncx2.cdf( float( ( IIN_l_t - np.sqrt(params.T_NN) )**2 ), int(chi_dof), float(self.mu_k));
 
               # store the P_MA for the full LMs
+              self.P_MA_k_full[t]= self.P_MA_k[t];
               # landmark selection
               if (params.SWITCH_LM_SELECTION==1):
                   if (self.P_MA_k[t] > params.P_MA_max):
                       self.P_MA_k[t]= -1;
-                      estimator.association_no_zeros[t]= -1;
+                      estimator.association_no_zeros[t]= -2;
 
                       for i in range(estimator.association.shape[0]):
                           if estimator.association[i] == lm_id_t:
@@ -578,7 +590,6 @@ class IntegrityMonitoringClassEkfExp:
                # not more than probability one
               if (self.P_MA_k[t] > 1):
                   self.P_MA_k[t]= 1
-
           # remove non-associated ones
           if (params.SWITCH_LM_SELECTION == 1):
 
@@ -590,6 +601,6 @@ class IntegrityMonitoringClassEkfExp:
 
               tmp_list = []
               for i in range(estimator.association_no_zeros.shape[0]):
-                  if (estimator.association_no_zeros[i] == -1):
+                  if (estimator.association_no_zeros[i] == -2):
                      tmp_list.append(i)
               estimator.association_no_zeros = np.delete(estimator.association_no_zeros, tmp_list, axis = 0)

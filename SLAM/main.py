@@ -74,7 +74,6 @@ for epoch in range(imu.num_readings):
     if ((counters.time_sim + params.dt_imu) > counters.time_gps and GPS_Index_exceeded == 0):
         if (params.SWITCH_CALIBRATION==0 and params.SWITCH_GPS_UPDATE==1):
             print('GPS')
-            #input(estimator.XX)
             # GPS update -- only use GPS vel if it's fast
             estimator.gps_update( gps.msmt[:,counters.k_gps], gps.R[counters.k_gps,:], params);
             # Yaw update
@@ -145,7 +144,6 @@ for epoch in range(imu.num_readings):
         else:
            counters.k_lidar = counters.k_lidar -1 ;
            LIDAR_Index_exceeded = 1;
-
 data_obj.store_update(counters.k_update, estimator, counters.time_sim)
 #data_obj.delete_extra_allocated_memory(counters)
 data_obj.plot_map_slam(estimator, gps, imu.num_readings, params)

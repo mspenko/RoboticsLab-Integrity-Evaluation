@@ -135,7 +135,6 @@ class EstimatorClassEkfExp:
           else:
              taua= params.taua_normal_operation
              tauw= params.tauw_normal_operation
-
           # Calculate parameters
           R_NB= R_NB_rot.R_NB_rot(phi,theta,psi) #<============
           Q_BE= Q_BE_fn.Q_BE_fn(phi,theta)
@@ -203,7 +202,6 @@ class EstimatorClassEkfExp:
       # ----------------------------------------------
       # ----------------------------------------------
       def gps_update(self, z, R, params):
-
           n_L= ((self.XX).shape[0] - 15) / 2
           # if we are fast enough --> use GPS velocity msmt
           if (np.linalg.norm(z[3:6]) > params.min_vel_gps and params.SWITCH_GPS_VEL_UPDATE==1): # sense velocity
@@ -217,7 +215,6 @@ class EstimatorClassEkfExp:
              R= np.diag( R[0:3] )
              H= np.concatenate((np.concatenate((np.eye(3), np.zeros((3,12))),axis = 1), np.zeros((3,int(n_L*2)))),axis = 1)
              print('-------- no GPS velocity ---------')
-
           self.XX[8]= pi_to_pi.pi_to_pi( self.XX[8] )
           L= np.dot( np.dot(self.PX, np.transpose(H)), np.linalg.inv( np.dot( np.dot(H, self.PX), np.transpose(H) ) + R) )
           innov= z - (np.dot( H, self.XX )).transpose()
@@ -321,9 +318,9 @@ class EstimatorClassEkfExp:
           
           self.XX[params.ind_yaw]= pi_to_pi.pi_to_pi( self.XX[params.ind_yaw] ); 
 
-          if np.all(self.association == 0):
+          if ( np.all(self.association == 0) or ( not (self.association).any() )):
               self.n_k= 0;
-              self.Y_k= None
+              self.Y_k= np.array([])
               self.L_k= None
               self.gamma_k= None
               self.q_k= 0;
@@ -338,7 +335,6 @@ class EstimatorClassEkfExp:
                 tmp.append(i)
 
           z = np.delete(z,tmp,axis = 0)
-
           # number of associated features
           if self.association_no_zeros.any() == 1:
              self.n_k= self.association_no_zeros.shape[0] * params.m_F;
@@ -404,7 +400,7 @@ class EstimatorClassEkfExp:
           #self.D_bar= self.Phi_k * EXP[0:15,15:]
 
           # Simplified method
-          self.D_bar= np.dot( np.dot( (G*dT) , (S/dT) ) , np.transpose((G*dT)) ) # simplified version
+          self.D_bar= np.dot( np.dot( G , S ) *dT, np.transpose(G) )# simplified version
       # ----------------------------------------------
       # ---------------------------------------------- 
       def addNewLM(self, z, R):
@@ -454,18 +450,5 @@ class EstimatorClassEkfExp:
 
           # Compute the F and G matrices (linear continuous time)
           [F,G]=FG_fn.FG_fn(u[0],u[1],u[2],u[4],u[5],self.XX[6],self.XX[7],self.XX[8],self.XX[9],self.XX[10],self.XX[11],self.XX[13],self.XX[14],taua,tauw)
-
           # Discretize system for IMU time (only for variance calculations)
           self.discretize(F, G, S, dT);
-      # ----------------------------------------------
-      # ----------------------------------------------
-      def yawMeasurement(self, w, params):
- 
-          r= np.array([[-params.r_IMU2rearAxis],[ 0], [0]]);
-          v_o= self.XX[3:6];
-          R_NB= R_NB_rot( self.XX[6], self.XX[7], self.XX[8]);
-
-          v_a= v_o + np.dot(R_NB,np.cross(w,r));
-          v_a= np.dot(v_a,np.inv(np.norm(v_a)));
-          yaw= math.atan2(v_a[1],v_a[0]);
-          return yaw
