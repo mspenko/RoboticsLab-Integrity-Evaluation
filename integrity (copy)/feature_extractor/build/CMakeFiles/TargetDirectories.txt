@@ -1,3 +1,0 @@
-/home/robolab/iit/integrity/feature_extractor/build/CMakeFiles/rebuild_cache.dir
-/home/robolab/iit/integrity/feature_extractor/build/CMakeFiles/FE.dir
-/home/robolab/iit/integrity/feature_extractor/build/CMakeFiles/edit_cache.dir
